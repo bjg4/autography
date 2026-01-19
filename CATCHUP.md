@@ -1,6 +1,6 @@
 # Autography: Session Catchup
 
-> Last updated: 2026-01-19
+> Last updated: 2026-01-19 (Session 2)
 
 ## What is Autography?
 
@@ -124,16 +124,17 @@ Full list in `plans/founders-priority-episodes.md`
 ## Next Steps
 
 ### Immediate (To Do Now)
-1. [ ] **Set up GitHub repo**: `gh repo create autography --public --source=. --remote=origin`
-2. [ ] **Clone Lenny's transcripts**: `git clone https://github.com/ChatPRD/lennys-podcast-transcripts.git data/lennys`
-3. [ ] **Install yt-dlp**: `pip install yt-dlp`
-4. [ ] **Test download script**: `python ingestion/download_founders.py --list-only`
+1. [x] **Set up GitHub repo**: https://github.com/bjg4/autography (private)
+2. [x] **Clone Lenny's transcripts**: 303 episodes in `data/lennys/`
+3. [x] **Install yt-dlp**: Done (via pip3)
+4. [x] **Test transcription pipeline**: Working with David Senra / Tobi Lütke episode
 
 ### Short-term (This Week)
-5. [ ] Download priority 100 Founders episodes
-6. [ ] Batch transcribe with Parakeet
-7. [ ] Build ChromaDB ingestion script (chunk_and_embed.py)
-8. [ ] Create basic search API endpoint
+5. [ ] **Add chunked processing** for long episodes (>30 min) to avoid memory limits
+6. [ ] Download priority Founders episodes via RSS (bypass YouTube restrictions)
+7. [ ] Batch transcribe with Parakeet
+8. [ ] Build ChromaDB ingestion script (chunk_and_embed.py)
+9. [ ] Create basic search API endpoint
 
 ### Medium-term
 9. [ ] Build Next.js frontend with chat UI
@@ -187,11 +188,47 @@ git clone https://github.com/ChatPRD/lennys-podcast-transcripts.git data/lennys
 
 ## Session Notes
 
+### Session 1
 - Started with broad vision, narrowed to specific tech choices
 - Parakeet chosen over Whisper API to avoid ~$600 transcription cost
 - Priority 100 episodes curated from multiple "best of" lists + David Senra's stated favorites
 - Existing parakeet-transcribe app at `../2026-01-18-parakeet/` is for real-time dictation, not batch processing
 - Bash commands failing in Claude session - user may need to run git/gh commands manually
+
+### Session 2
+- **GitHub repo created**: https://github.com/bjg4/autography (private)
+- **Lenny's transcripts cloned**: 303 episodes in `data/lennys/`
+- **Standardized transcript format**: Using `subject` instead of `guest` for both sources
+- **Tested full pipeline**: Downloaded Tobi Lütke episode from RSS, transcribed 10-min clip with Parakeet
+- **Parakeet performance**: ~15x realtime on M-series Mac (10 min audio in 40 sec)
+- **Issue found**: Full 2.4hr episodes exceed Metal memory limit - need chunked processing
+
+#### Transcript Format (Lenny's-style)
+```markdown
+---
+subject: Tobi Lütke
+title: Full Episode Title
+youtube_url: https://youtube.com/watch?v=...
+video_id: abc123
+publish_date: '2026-01-18'
+duration_seconds: 599.8
+duration: '9:59'
+channel: David Senra Podcast
+keywords: []
+---
+
+# Episode Title
+
+## Transcript
+
+Speaker Name (00:00:02):
+Transcript text here grouped in ~30 second chunks...
+```
+
+#### Dependencies Installed
+- `yt-dlp` (via pip3)
+- `parakeet-mlx` (via python3.11)
+- `ffmpeg` (via homebrew)
 
 ---
 
