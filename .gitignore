@@ -1,0 +1,42 @@
+# Data directories (large files)
+data/
+*.mp3
+*.mp4
+*.m4a
+*.wav
+*.flac
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+.env
+
+# ChromaDB
+chroma_db/
+*.chromadb
+
+# Node
+node_modules/
+.next/
+dist/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Transcripts (generated, can be large)
+# Uncomment if you want to exclude:
+# transcripts/
+
+# Secrets
+.env.local
+.env.production
+*.pem

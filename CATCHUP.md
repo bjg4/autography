@@ -1,0 +1,198 @@
+# Autography: Session Catchup
+
+> Last updated: 2026-01-19
+
+## What is Autography?
+
+**Autography** (A-U-T-O-G-R-A-P-H-Y) is an indexable chatbot for product management knowledge - like "Open Evidence" but for PM, founders, and design content. Users ask long-tail questions and get back **citable evidence** with sources (podcast timestamps, book pages, article links).
+
+**Tagline**: "The open evidence of product management"
+
+---
+
+## Key Decisions Made
+
+| Decision | Choice | Rationale |
+|----------|--------|-----------|
+| **Name** | Autography | Play on "autobiography" - founder stories |
+| **Vector DB** | ChromaDB | Native hybrid search (RRF), free, good docs |
+| **Transcription** | Parakeet MLX (local) | Free, 6% WER, 50x faster than Whisper, runs on Mac |
+| **Embeddings** | text-embedding-3-large | Start here, can switch to voyage-3 later |
+| **RAG Framework** | LlamaIndex | Better for citation-heavy retrieval vs LangChain |
+| **Frontend** | Next.js 15 + Vercel AI SDK | Streaming, Server Components, modern |
+| **Search** | Hybrid (70% semantic / 30% BM25) | Best retrieval quality per 2025 research |
+| **Books format** | EPUB preferred over PDF | Cleaner text extraction, no OCR issues |
+| **Founders episodes** | Priority 100 first | Quality over quantity, curated list created |
+
+---
+
+## Data Sources
+
+| Source | Status | Volume | Notes |
+|--------|--------|--------|-------|
+| **Lenny's Podcast** | ✅ Ready | 269 episodes | [GitHub repo](https://github.com/ChatPRD/lennys-podcast-transcripts) with markdown + YAML frontmatter |
+| **Founders Podcast** | 🔄 Need to download + transcribe | ~100 priority | Use yt-dlp + Parakeet. [Tapesearch](https://www.tapesearch.com/podcast/founders/1141877104) has 439 eps if bulk available |
+| **David Senra Podcast** | 🔄 Need to transcribe | ~15 episodes | New show (Sept 2025): Tobi Lütke, John Mackey, James Dyson, etc. |
+| **John Cutler** | ⏳ Need to curate | ~1000 posts | Blog posts, articles, Twitter threads |
+| **Top 20 PM Books** | ⏳ User will provide EPUBs | 20 books | Fair-use excerpts only |
+
+### Priority Founders Episodes (Top 30)
+
+Charlie Munger, Sam Zell, Rockefeller, Daniel Ludwig, Sam Zemurray, David Ogilvy, Ed Thorp, James Dyson, Estée Lauder, Anna Wintour, Les Schwab, Jim Simons, Todd Graves, Jensen Huang, Elon Musk, Bill Gates, Bernard Arnault, Kobe Bryant, Brunello Cucinelli, Edwin Land, Sam Walton, Jeff Bezos, Jimmy Iovine, Ken Griffin, Enzo Ferrari, Michael Jordan, Hyundai founder
+
+Full list in `plans/founders-priority-episodes.md`
+
+---
+
+## Files Created
+
+```
+/Users/bjg/Documents/GullyGorge/tries/2026-01-19-autobiography/
+├── README.md                     # Project overview
+├── PLAN.md                       # Original comprehensive plan
+├── CATCHUP.md                    # This file
+├── .gitignore                    # Excludes data/, node_modules/, etc.
+├── founders-priority-episodes.md # (duplicate - can delete)
+├── ingestion/
+│   ├── batch_transcribe.py       # Parakeet batch transcription script
+│   └── download_founders.py      # yt-dlp wrapper with priority filtering
+└── plans/
+    ├── feat-autography-pm-knowledge-base.md  # Full technical spec
+    └── founders-priority-episodes.md         # Curated top 100 episodes
+```
+
+---
+
+## Tech Architecture
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  FRONTEND: Next.js 15 + Vercel AI SDK                       │
+│  - Streaming chat with useChat hook                         │
+│  - Citation cards with expand/collapse                      │
+│  - Warm cream/terracotta design                             │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│  BACKEND: Python (FastAPI) + LlamaIndex                     │
+│  - Query understanding (LLM rewrite)                        │
+│  - condense_plus_context chat mode                          │
+│  - Citation extraction                                      │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│  RETRIEVAL: ChromaDB Hybrid Search                          │
+│  - RRF: 70% dense embeddings + 30% sparse (BM25)            │
+│  - Cross-encoder reranking (bge-reranker-v2-m3)             │
+│  - Metadata filtering (source, speaker, date)               │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────┐
+│  INGESTION: Parakeet MLX + Chunking                         │
+│  - 512-token chunks, 100-token overlap                      │
+│  - Speaker-aware boundaries for transcripts                 │
+│  - Rich metadata per chunk (timestamp, source, speaker)     │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## What's Been Researched
+
+### Context7 Documentation Pulled
+- ✅ ChromaDB hybrid search API (RRF, Knn, metadata filtering)
+- ✅ Next.js 15 streaming with Vercel AI SDK
+- ✅ LlamaIndex chat engine with citation tracking
+
+### Best Practices Researched
+- ✅ RAG chunking strategies (512 tokens optimal for transcripts)
+- ✅ Hybrid search fusion (RRF with k=60)
+- ✅ Embedding models comparison (OpenAI vs Voyage vs BGE)
+- ✅ Cross-encoder reranking (20-35% accuracy improvement)
+
+### Data Source Research
+- ✅ Lenny's podcast repo structure (269 eps, markdown, YAML frontmatter)
+- ✅ Founders Podcast transcript options (Tapesearch, yt-dlp + Parakeet)
+- ✅ NVIDIA Parakeet capabilities (free, local, 6% WER, 50x realtime)
+- ✅ PDF vs EPUB for books (EPUB strongly preferred)
+
+---
+
+## Next Steps
+
+### Immediate (To Do Now)
+1. [ ] **Set up GitHub repo**: `gh repo create autography --public --source=. --remote=origin`
+2. [ ] **Clone Lenny's transcripts**: `git clone https://github.com/ChatPRD/lennys-podcast-transcripts.git data/lennys`
+3. [ ] **Install yt-dlp**: `pip install yt-dlp`
+4. [ ] **Test download script**: `python ingestion/download_founders.py --list-only`
+
+### Short-term (This Week)
+5. [ ] Download priority 100 Founders episodes
+6. [ ] Batch transcribe with Parakeet
+7. [ ] Build ChromaDB ingestion script (chunk_and_embed.py)
+8. [ ] Create basic search API endpoint
+
+### Medium-term
+9. [ ] Build Next.js frontend with chat UI
+10. [ ] Add citation card components
+11. [ ] Implement follow-up question generation
+12. [ ] Add user memory/personalization
+
+---
+
+## Open Questions
+
+| Question | Options | Notes |
+|----------|---------|-------|
+| **Auth model?** | Anonymous / Optional / Required | Recommend: Optional (anon search OK, save requires login) |
+| **Tapesearch bulk?** | Check if available | Could save transcription time |
+| **Book excerpts?** | Fair use quotes vs summaries | Legal consideration - keep quotes short |
+| **Hosting?** | Vercel + Railway / Self-hosted | Vercel for frontend, Railway for Python backend? |
+
+---
+
+## Useful Commands
+
+```bash
+# Navigate to project
+cd /Users/bjg/Documents/GullyGorge/tries/2026-01-19-autobiography
+
+# List Founders episodes (requires yt-dlp)
+python ingestion/download_founders.py --list-only
+
+# Download priority 100
+python ingestion/download_founders.py --priority 100 -o data/founders/audio
+
+# Batch transcribe (requires parakeet_mlx)
+python ingestion/batch_transcribe.py data/founders/audio -o data/founders/transcripts --skip-existing
+
+# Clone Lenny's transcripts
+git clone https://github.com/ChatPRD/lennys-podcast-transcripts.git data/lennys
+```
+
+---
+
+## Key URLs
+
+- **Lenny's Transcripts**: https://github.com/ChatPRD/lennys-podcast-transcripts
+- **Founders Podcast**: https://www.founderspodcast.com
+- **Tapesearch (Founders)**: https://www.tapesearch.com/podcast/founders/1141877104
+- **Parakeet Model**: https://huggingface.co/nvidia/parakeet-tdt-0.6b-v2
+- **ChromaDB Docs**: https://docs.trychroma.com
+
+---
+
+## Session Notes
+
+- Started with broad vision, narrowed to specific tech choices
+- Parakeet chosen over Whisper API to avoid ~$600 transcription cost
+- Priority 100 episodes curated from multiple "best of" lists + David Senra's stated favorites
+- Existing parakeet-transcribe app at `../2026-01-18-parakeet/` is for real-time dictation, not batch processing
+- Bash commands failing in Claude session - user may need to run git/gh commands manually
+
+---
+
+*To resume: Read this file, then check the plans/ directory for detailed specs.*
