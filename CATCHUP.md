@@ -34,7 +34,7 @@
 |--------|--------|--------|-------|
 | **Lenny's Podcast** | ✅ Ready | 269 episodes | [GitHub repo](https://github.com/ChatPRD/lennys-podcast-transcripts) with markdown + YAML frontmatter |
 | **Founders Podcast** | 🔄 Need to download + transcribe | ~100 priority | Use yt-dlp + Parakeet. [Tapesearch](https://www.tapesearch.com/podcast/founders/1141877104) has 439 eps if bulk available |
-| **David Senra Podcast** | 🔄 Need to transcribe | ~15 episodes | New show (Sept 2025): Tobi Lütke, John Mackey, James Dyson, etc. |
+| **David Senra Podcast** | ✅ 7/9 done | 9 episodes | Tobi Lütke, John Mackey, Patrick O'Shaughnessy, James Dyson, Michael Ovitz, Todd Graves, Brad Jacobs done. Remaining: Michael Dell, Daniel Ek |
 | **John Cutler** | ⏳ Need to curate | ~1000 posts | Blog posts, articles, Twitter threads |
 | **Top 20 PM Books** | ⏳ User will provide EPUBs | 20 books | Fair-use excerpts only |
 
