@@ -1,6 +1,6 @@
 # Autography: Session Catchup
 
-> Last updated: 2026-01-19 (Session 2)
+> Last updated: 2026-01-19 (Session 3)
 
 ## What is Autography?
 
@@ -23,6 +23,8 @@
 | **Search** | Hybrid (70% semantic / 30% BM25) | Best retrieval quality per 2025 research |
 | **Books format** | EPUB preferred over PDF | Cleaner text extraction, no OCR issues |
 | **Founders episodes** | Priority 100 first | Quality over quantity, curated list created |
+| **Audio speed** | Normal (1x) only | 2x speed degrades proper noun accuracy unacceptably |
+| **Chunk size** | 10 minutes | Stays under Metal 12GB limit with headroom |
 
 ---
 
@@ -55,6 +57,7 @@ Full list in `plans/founders-priority-episodes.md`
 ├── founders-priority-episodes.md # (duplicate - can delete)
 ├── ingestion/
 │   ├── batch_transcribe.py       # Parakeet batch transcription script
+│   ├── chunked_transcribe.py     # Long audio chunked processing (10-min segments)
 │   └── download_founders.py      # yt-dlp wrapper with priority filtering
 └── plans/
     ├── feat-autography-pm-knowledge-base.md  # Full technical spec
@@ -130,7 +133,7 @@ Full list in `plans/founders-priority-episodes.md`
 4. [x] **Test transcription pipeline**: Working with David Senra / Tobi Lütke episode
 
 ### Short-term (This Week)
-5. [ ] **Add chunked processing** for long episodes (>30 min) to avoid memory limits
+5. [x] **Add chunked processing** for long episodes (>30 min) to avoid memory limits
 6. [ ] Download priority Founders episodes via RSS (bypass YouTube restrictions)
 7. [ ] Batch transcribe with Parakeet
 8. [ ] Build ChromaDB ingestion script (chunk_and_embed.py)
@@ -229,6 +232,46 @@ Transcript text here grouped in ~30 second chunks...
 - `yt-dlp` (via pip3)
 - `parakeet-mlx` (via python3.11)
 - `ffmpeg` (via homebrew)
+
+### Session 3
+- **Chunked transcription implemented**: `chunked_transcribe.py` splits audio into 10-min segments
+- **Full episode transcription working**: 2.4hr Tobi Lütke episode transcribed in 11 min (~13x realtime)
+- **Metal memory limit**: 12GB buffer max, 10-min chunks stay safely under limit
+- **2x speed testing**: Tested James Dyson episode at normal vs 2x speed
+
+#### 2x Speed Comparison Results
+
+| Passage | Normal Speed | 2x Speed | Verdict |
+|---------|--------------|----------|---------|
+| Education | "Latin, Greek, and ancient history" ✓ | "last in Greek in ancient history" ✗ | Normal wins |
+| Project name | "autobiography" ✓ | "autography" ✗ | Normal wins |
+| Person name | "Charlie Munger" ✓ | "Sherlinger" ✗ | Normal wins (critical) |
+| Person name | "Jeff Bezos" ✓ | "Just praise us" ✗ | Normal wins (critical) |
+
+**Conclusion**: 2x speed saves ~38% processing time but introduces unacceptable errors, especially for proper nouns (names, companies). For a citation-focused knowledge base, accuracy is paramount. **Use normal speed only.**
+
+#### Performance Benchmarks
+
+| Episode | Duration | Process Time | RTF | Notes |
+|---------|----------|--------------|-----|-------|
+| Tobi Lütke (full) | 2:24:00 | 11 min | 13x | 15 chunks |
+| James Dyson (normal) | 1:38:20 | 7:51 | 12.5x | Good quality |
+| James Dyson (2x) | 0:49:10 | 4:51 | 10x | Poor quality |
+
+#### Useful Commands (Session 3)
+
+```bash
+# Chunked transcription for long episodes
+/opt/homebrew/bin/python3.11 ingestion/chunked_transcribe.py \
+  data/david-senra/audio/episode.mp3 \
+  --output data/david-senra/episodes/episode-name/transcript.md \
+  --metadata data/david-senra/audio/metadata/episode.json \
+  --speaker "David Senra" \
+  --chunk-minutes 10
+
+# Create 2x speed audio (NOT recommended for transcription)
+ffmpeg -i input.mp3 -filter:a "atempo=2.0" output-2x.mp3
+```
 
 ---
 
