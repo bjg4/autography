@@ -43,3 +43,4 @@ Thumbs.db
 .env.local
 .env.production
 *.pem
+bm25_index.pkl
