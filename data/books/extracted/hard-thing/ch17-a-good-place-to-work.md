@@ -1,0 +1,10 @@
+---
+title: "A Good Place to Work"
+author: Ben Horowitz
+source_type: book_chapter
+book_title: "The Hard Thing About Hard Things"
+chapter_number: 17
+scraped_date: '2026-01-19'
+---
+
+A Good Place to Work
