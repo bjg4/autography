@@ -5,6 +5,13 @@
 *.wav
 *.flac
 
+# Books (copyrighted)
+*.pdf
+*.epub
+
+# Logs
+*.log
+
 # Audio directories (exclude audio, keep transcripts)
 data/*/audio/
 data/lennys/
