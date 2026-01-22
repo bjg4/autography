@@ -4,17 +4,24 @@ Search router for the Autography API.
 Provides endpoints for hybrid search with filters.
 """
 
+import hashlib
+import json
 import pickle
 from pathlib import Path
 from typing import Optional
 
 import chromadb
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 from rank_bm25 import BM25Okapi
 from sentence_transformers import SentenceTransformer
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 router = APIRouter(prefix="/api", tags=["search"])
+
+# Rate limiter
+limiter = Limiter(key_func=get_remote_address)
 
 # Global search engine instance
 _search_engine: Optional["HybridSearch"] = None
@@ -81,15 +88,35 @@ class HybridSearch:
         self._load_bm25(bm25_path)
 
     def _load_bm25(self, bm25_path: str):
-        """Load BM25 index from pickle file."""
+        """Load BM25 index from pickle file with validation."""
+        # Validate file exists
+        if not Path(bm25_path).exists():
+            raise FileNotFoundError(f"BM25 index not found: {bm25_path}")
+
+        # Check for checksum file (for integrity validation)
+        checksum_path = Path(bm25_path).with_suffix('.sha256')
+        if checksum_path.exists():
+            expected_hash = checksum_path.read_text().strip()
+            with open(bm25_path, 'rb') as f:
+                actual_hash = hashlib.sha256(f.read()).hexdigest()
+            if actual_hash != expected_hash:
+                raise ValueError(f"BM25 index checksum mismatch - file may be corrupted or tampered")
+
         with open(bm25_path, 'rb') as f:
             cache = pickle.load(f)
+
+            # Validate expected structure
+            required_keys = {'bm25', 'doc_ids', 'doc_texts', 'doc_metadatas'}
+            if not required_keys.issubset(cache.keys()):
+                raise ValueError(f"Invalid BM25 index structure - missing keys: {required_keys - set(cache.keys())}")
+
             self.bm25 = cache['bm25']
             self.doc_ids = cache['doc_ids']
             self.doc_texts = cache['doc_texts']
             self.doc_metadatas = cache['doc_metadatas']
             # Build O(1) lookup dict for document retrieval
             self.doc_id_to_idx = {doc_id: idx for idx, doc_id in enumerate(self.doc_ids)}
+
         print(f"Loaded BM25 index ({len(self.doc_ids)} docs)")
 
     def _semantic_search(self, query: str, n: int) -> list[tuple[str, float]]:
@@ -258,16 +285,17 @@ def get_search_engine() -> HybridSearch:
 
 
 @router.post("/search", response_model=SearchResponse)
-async def search(request: SearchRequest):
+@limiter.limit("30/minute")
+async def search(search_request: SearchRequest, request: Request):
     """Search the knowledge base."""
     engine = get_search_engine()
 
     results = engine.search(
-        query=request.query,
-        n_results=request.n_results,
-        source_type=request.source_type,
-        author=request.author,
-        mode=request.mode
+        query=search_request.query,
+        n_results=search_request.n_results,
+        source_type=search_request.source_type,
+        author=search_request.author,
+        mode=search_request.mode
     )
 
     formatted_results = []
@@ -288,14 +316,15 @@ async def search(request: SearchRequest):
         ))
 
     return SearchResponse(
-        query=request.query,
+        query=search_request.query,
         total=len(formatted_results),
         results=formatted_results
     )
 
 
 @router.get("/sources", response_model=SourcesResponse)
-async def get_sources():
+@limiter.limit("60/minute")
+async def get_sources(request: Request):
     """Get available sources and stats."""
     engine = get_search_engine()
     sources = engine.get_sources()

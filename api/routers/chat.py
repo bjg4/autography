@@ -9,13 +9,18 @@ from typing import Optional
 
 import anthropic
 from anthropic import AsyncAnthropic
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from routers.search import get_search_engine
 
 router = APIRouter(prefix="/api", tags=["chat"])
+
+# Rate limiter - 10 requests per minute for expensive chat endpoints
+limiter = Limiter(key_func=get_remote_address)
 
 # Initialize async Anthropic client (doesn't block FastAPI event loop)
 client = AsyncAnthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
@@ -142,7 +147,8 @@ def extract_follow_ups(answer: str) -> tuple[str, list[str]]:
 
 
 @router.post("/chat", response_model=ChatResponse)
-async def chat(request: ChatRequest):
+@limiter.limit("10/minute")
+async def chat(chat_request: ChatRequest, request: Request):
     """Answer a question using RAG with citations."""
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
@@ -154,10 +160,10 @@ async def chat(request: ChatRequest):
     # 1. Retrieve relevant sources
     engine = get_search_engine()
     results = engine.search(
-        query=request.question,
-        n_results=request.n_sources,
-        source_types=request.source_types,
-        authors=request.authors,
+        query=chat_request.question,
+        n_results=chat_request.n_sources,
+        source_types=chat_request.source_types,
+        authors=chat_request.authors,
         mode="hybrid"
     )
 
@@ -183,14 +189,14 @@ async def chat(request: ChatRequest):
     messages = []
 
     # Add previous conversation turns if present (limit to last 3 for token efficiency)
-    if request.history:
-        recent_history = request.history[-3:]  # Keep last 3 turns max
+    if chat_request.history:
+        recent_history = chat_request.history[-3:]  # Keep last 3 turns max
         for turn in recent_history:
             messages.append({"role": "user", "content": turn.question})
             messages.append({"role": "assistant", "content": turn.answer})
 
     # Add current question with retrieved context
-    user_message = f"""{request.question}
+    user_message = f"""{chat_request.question}
 
 Here's what I found in the knowledge base:
 
@@ -223,7 +229,7 @@ Here's what I found in the knowledge base:
     # Default follow-ups if none extracted
     if not follow_ups:
         follow_ups = [
-            f"What else do these sources say about {request.question.split()[0:3]}?",
+            f"What else do these sources say about {chat_request.question.split()[0:3]}?",
             "Are there any contrasting viewpoints on this topic?",
             "How do I apply this in practice?"
         ]
@@ -236,7 +242,8 @@ Here's what I found in the knowledge base:
 
 
 @router.post("/chat/stream")
-async def chat_stream(request: ChatRequest):
+@limiter.limit("10/minute")
+async def chat_stream(chat_request: ChatRequest, request: Request):
     """Stream a chat response for real-time display."""
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
@@ -247,18 +254,32 @@ async def chat_stream(request: ChatRequest):
 
     engine = get_search_engine()
     results = engine.search(
-        query=request.question,
-        n_results=request.n_sources,
+        query=chat_request.question,
+        n_results=chat_request.n_sources,
+        source_types=chat_request.source_types,
+        authors=chat_request.authors,
         mode="hybrid"
     )
 
     context, citations = format_sources_for_context(results)
 
-    user_message = f"""{request.question}
+    # Build messages with conversation history (same as non-streaming endpoint)
+    messages = []
+
+    # Add previous conversation turns if present (limit to last 3 for token efficiency)
+    if chat_request.history:
+        recent_history = chat_request.history[-3:]
+        for turn in recent_history:
+            messages.append({"role": "user", "content": turn.question})
+            messages.append({"role": "assistant", "content": turn.answer})
+
+    # Add current question with retrieved context
+    user_message = f"""{chat_request.question}
 
 Here's what I found in the knowledge base:
 
 {context}"""
+    messages.append({"role": "user", "content": user_message})
 
     async def generate():
         import json
@@ -271,7 +292,7 @@ Here's what I found in the knowledge base:
             model="claude-sonnet-4-20250514",
             max_tokens=1500,
             system=SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": user_message}]
+            messages=messages
         ) as stream:
             async for text in stream.text_stream:
                 yield f"data: {json.dumps({'type': 'token', 'data': text})}\n\n"

@@ -9,13 +9,33 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from starlette.middleware.base import BaseHTTPMiddleware
 
 # Load .env file if it exists
 load_dotenv()
 from fastapi.middleware.cors import CORSMiddleware
 
 from routers import search, chat
+
+# Rate limiter setup
+limiter = Limiter(key_func=get_remote_address)
+
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """Add security headers to all responses."""
+
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["X-XSS-Protection"] = "1; mode=block"
+        response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+        return response
 
 
 @asynccontextmanager
@@ -45,6 +65,13 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# Add rate limiter to app state
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# Security headers middleware
+app.add_middleware(SecurityHeadersMiddleware)
+
 # CORS configuration
 allowed_origins = os.environ.get('CORS_ORIGINS', 'http://localhost:3000').split(',')
 app.add_middleware(
@@ -52,7 +79,7 @@ app.add_middleware(
     allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST"],
-    allow_headers=["*"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 # Include routers
@@ -71,7 +98,8 @@ async def root():
 
 
 @app.get("/health")
-async def health():
+@limiter.limit("60/minute")
+async def health(request: Request):
     """Health check endpoint."""
     return {
         "status": "ok",
