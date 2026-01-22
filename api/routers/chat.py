@@ -19,28 +19,50 @@ router = APIRouter(prefix="/api", tags=["chat"])
 # Initialize Anthropic client
 client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
 
-SYSTEM_PROMPT = """You are Autography, a warm and knowledgeable assistant helping users explore product management wisdom from trusted sources.
+SYSTEM_PROMPT = """You synthesize product management wisdom from books, essays, and practitioner conversations.
 
-Your role is to synthesize insights from the provided source materials and give clear, actionable answers.
+CRITICAL: Your first sentence must be substantive insight, not meta-commentary.
 
-IMPORTANT RULES:
-1. ALWAYS cite your sources using [1], [2], [3] notation when referencing information
-2. Only use information from the provided sources - never make things up
-3. If the sources don't contain relevant information, say so honestly
-4. Be conversational but precise
-5. After your answer, suggest 2-3 follow-up questions the user might want to explore
+BANNED OPENINGS (never use these patterns):
+- "Based on the sources..."
+- "Based on the provided..."
+- "According to the sources..."
+- "The sources suggest..."
+- "What makes a great X comes down to..."
+- "There are several key factors..."
+- "Great question!"
+- Any sentence that describes what you're about to do
 
-Format your response like this:
-- Start with a direct answer to the question
-- Support key points with citations [1], [2], etc.
-- Keep it concise but complete
-- End with "Follow-up questions:" section"""
+GOOD OPENINGS (use patterns like these):
+- "The highest-performing teams share one trait: they fight about the right things. [1]"
+- "Teresa Torres and Marty Cagan actually disagree on this—and the tension is instructive."
+- "Forget the triad. The best teams are quads now, with data as the fourth pillar. [2]"
+- "There's no single answer here, but John Cutler's research points to something unexpected..."
+- Start with a specific claim, tension, or insight—then support it.
+
+HOW TO RESPOND:
+- Lead with the most interesting insight, not a summary structure
+- Cite [1], [2] etc. inline as you reference specific sources
+- Surface disagreements between authors—don't flatten them
+- Match response length to question complexity (short questions = short answers)
+- End with 2-3 specific follow-up threads after "---"
+
+Your sources include Marty Cagan, Teresa Torres, John Cutler, Ryan Singer, and others who often disagree. That disagreement is valuable—show it."""
+
+
+class ConversationTurn(BaseModel):
+    """A single turn in the conversation."""
+    question: str
+    answer: str
 
 
 class ChatRequest(BaseModel):
     """Chat request body."""
     question: str = Field(..., min_length=1, description="User's question")
     n_sources: int = Field(default=8, ge=1, le=20, description="Number of sources to retrieve")
+    source_types: Optional[list[str]] = Field(default=None, description="Filter by source types")
+    authors: Optional[list[str]] = Field(default=None, description="Filter by authors")
+    history: Optional[list[ConversationTurn]] = Field(default=None, description="Previous conversation turns for context")
 
 
 class Citation(BaseModel):
@@ -95,22 +117,27 @@ def extract_follow_ups(answer: str) -> tuple[str, list[str]]:
     """Extract follow-up questions from the answer."""
     follow_ups = []
 
-    if "Follow-up questions:" in answer:
+    # Try new format first (--- separator)
+    if "\n---" in answer:
+        parts = answer.split("\n---")
+        main_answer = parts[0].strip()
+        follow_up_text = parts[1].strip() if len(parts) > 1 else ""
+    # Fall back to old format
+    elif "Follow-up questions:" in answer:
         parts = answer.split("Follow-up questions:")
         main_answer = parts[0].strip()
         follow_up_text = parts[1].strip() if len(parts) > 1 else ""
+    else:
+        return answer, follow_ups
 
-        for line in follow_up_text.split('\n'):
-            line = line.strip()
-            if line and (line.startswith('-') or line.startswith('•') or line[0].isdigit()):
-                # Clean up the line
-                clean = line.lstrip('-•0123456789. ').strip()
-                if clean and '?' in clean:
-                    follow_ups.append(clean)
+    for line in follow_up_text.split('\n'):
+        line = line.strip()
+        if line and (line.startswith('-') or line.startswith('•') or line[0].isdigit()):
+            clean = line.lstrip('-•0123456789. ').strip()
+            if clean and '?' in clean:
+                follow_ups.append(clean)
 
-        return main_answer, follow_ups[:3]
-
-    return answer, follow_ups
+    return main_answer, follow_ups[:3]
 
 
 @router.post("/chat", response_model=ChatResponse)
@@ -128,6 +155,8 @@ async def chat(request: ChatRequest):
     results = engine.search(
         query=request.question,
         n_results=request.n_sources,
+        source_types=request.source_types,
+        authors=request.authors,
         mode="hybrid"
     )
 
@@ -145,24 +174,47 @@ async def chat(request: ChatRequest):
     # 2. Format sources for context
     context, citations = format_sources_for_context(results)
 
-    # 3. Call Claude to synthesize answer
-    user_message = f"""Based on the following sources from the PM knowledge base, answer this question:
+    # Log token estimate for debugging
+    total_words = sum(len(r['content'].split()) for r in results)
+    print(f"[Chat] Retrieved {len(results)} sources, ~{total_words} words (~{int(total_words * 1.3)} tokens)")
 
-Question: {request.question}
+    # 3. Build messages with conversation history
+    messages = []
 
-Sources:
-{context}
+    # Add previous conversation turns if present (limit to last 3 for token efficiency)
+    if request.history:
+        recent_history = request.history[-3:]  # Keep last 3 turns max
+        for turn in recent_history:
+            messages.append({"role": "user", "content": turn.question})
+            messages.append({"role": "assistant", "content": turn.answer})
 
-Remember to cite sources using [1], [2], etc. and end with follow-up questions."""
+    # Add current question with retrieved context
+    user_message = f"""{request.question}
 
-    response = client.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=1500,
-        system=SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": user_message}]
-    )
+Here's what I found in the knowledge base:
 
-    answer_text = response.content[0].text
+{context}"""
+    messages.append({"role": "user", "content": user_message})
+
+    # 4. Call Claude to synthesize answer
+    try:
+        response = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=1500,
+            system=SYSTEM_PROMPT,
+            messages=messages
+        )
+        answer_text = response.content[0].text
+    except anthropic.RateLimitError:
+        raise HTTPException(
+            status_code=429,
+            detail="Rate limit exceeded. Please wait a minute and try again."
+        )
+    except anthropic.APIError as e:
+        raise HTTPException(
+            status_code=502,
+            detail=f"AI service error: {str(e)}"
+        )
 
     # 4. Extract follow-ups and clean answer
     clean_answer, follow_ups = extract_follow_ups(answer_text)
@@ -201,14 +253,11 @@ async def chat_stream(request: ChatRequest):
 
     context, citations = format_sources_for_context(results)
 
-    user_message = f"""Based on the following sources from the PM knowledge base, answer this question:
+    user_message = f"""{request.question}
 
-Question: {request.question}
+Here's what I found in the knowledge base:
 
-Sources:
-{context}
-
-Remember to cite sources using [1], [2], etc. and end with follow-up questions."""
+{context}"""
 
     async def generate():
         import json

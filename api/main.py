@@ -8,7 +8,11 @@ import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
+from dotenv import load_dotenv
 from fastapi import FastAPI
+
+# Load .env file if it exists
+load_dotenv()
 from fastapi.middleware.cors import CORSMiddleware
 
 from routers import search, chat

@@ -23,7 +23,24 @@ export interface SourcesResponse {
   }
 }
 
-export async function askQuestion(question: string, nSources: number = 8): Promise<ChatResponse> {
+export interface ConversationTurn {
+  question: string
+  answer: string
+}
+
+export interface ChatOptions {
+  nSources?: number
+  sourceTypes?: string[]
+  authors?: string[]
+  history?: ConversationTurn[]
+}
+
+export async function askQuestion(
+  question: string,
+  options: ChatOptions = {}
+): Promise<ChatResponse> {
+  const { nSources = 8, sourceTypes, authors, history } = options
+
   const res = await fetch(`${API_URL}/api/chat`, {
     method: 'POST',
     headers: {
@@ -32,6 +49,9 @@ export async function askQuestion(question: string, nSources: number = 8): Promi
     body: JSON.stringify({
       question,
       n_sources: nSources,
+      source_types: sourceTypes?.length ? sourceTypes : undefined,
+      authors: authors?.length ? authors : undefined,
+      history: history?.length ? history : undefined,
     }),
   })
 

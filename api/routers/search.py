@@ -145,7 +145,9 @@ class HybridSearch:
         query: str,
         n_results: int = 10,
         source_type: Optional[str] = None,
+        source_types: Optional[list[str]] = None,
         author: Optional[str] = None,
+        authors: Optional[list[str]] = None,
         mode: str = "hybrid",
         diversify: bool = True
     ) -> list[dict]:
@@ -169,10 +171,20 @@ class HybridSearch:
             idx = self.doc_ids.index(doc_id)
             metadata = self.doc_metadatas[idx]
 
+            # Single source_type filter (backwards compat)
             if source_type and metadata.get('source_type') != source_type:
                 continue
+            # Multiple source_types filter
+            if source_types and metadata.get('source_type') not in source_types:
+                continue
+            # Single author filter (backwards compat)
             if author and author.lower() not in metadata.get('author', '').lower():
                 continue
+            # Multiple authors filter
+            if authors:
+                doc_author = metadata.get('author', '').lower()
+                if not any(a.lower() in doc_author for a in authors):
+                    continue
 
             # Diversity: limit results per author/source
             if diversify:

@@ -90,8 +90,25 @@ def get_author_from_path(filepath: Path) -> str:
     return 'Unknown'
 
 
-def collect_documents(data_dir: Path) -> list[dict]:
-    """Collect all markdown documents with metadata."""
+def chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> list[str]:
+    """Split text into overlapping chunks by word count."""
+    words = text.split()
+    if len(words) <= chunk_size:
+        return [text]
+
+    chunks = []
+    start = 0
+    while start < len(words):
+        end = start + chunk_size
+        chunk_words = words[start:end]
+        chunks.append(' '.join(chunk_words))
+        start = end - overlap  # Overlap for context continuity
+
+    return chunks
+
+
+def collect_documents(data_dir: Path, chunk_size: int = 500, overlap: int = 50) -> list[dict]:
+    """Collect all markdown documents with metadata, chunked for retrieval."""
     documents = []
 
     # Find all markdown files (excluding full-book.md files)
@@ -107,10 +124,8 @@ def collect_documents(data_dir: Path) -> list[dict]:
         content = md_file.read_text()
         metadata, body = parse_frontmatter(content)
 
-        # Build document record
-        doc = {
-            'id': str(md_file.relative_to(data_dir)),
-            'content': body,
+        # Base metadata for all chunks from this file
+        base_meta = {
             'file_path': str(md_file),
             'title': metadata.get('title', md_file.stem),
             'author': metadata.get('author', get_author_from_path(md_file)),
@@ -121,8 +136,20 @@ def collect_documents(data_dir: Path) -> list[dict]:
             'chapter_number': metadata.get('chapter_number', ''),
         }
 
-        # Only include non-empty documents
-        if len(body.strip()) > 50:
+        # Chunk the body text
+        chunks = chunk_text(body, chunk_size=chunk_size, overlap=overlap)
+
+        for i, chunk in enumerate(chunks):
+            if len(chunk.strip()) < 50:
+                continue
+
+            doc = {
+                'id': f"{md_file.relative_to(data_dir)}::chunk_{i}",
+                'content': chunk,
+                'chunk_index': i,
+                'total_chunks': len(chunks),
+                **base_meta
+            }
             documents.append(doc)
 
     return documents
@@ -154,6 +181,8 @@ def index_documents(
             'chapter_number': str(doc['chapter_number']),
             'file_path': doc['file_path'],
             'char_count': len(doc['content']),
+            'chunk_index': doc.get('chunk_index', 0),
+            'total_chunks': doc.get('total_chunks', 1),
         } for doc in batch]
 
         # Generate embeddings
