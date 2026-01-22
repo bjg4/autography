@@ -55,6 +55,31 @@ export default function Home() {
     }))
   }
 
+  // Extract follow-up questions from answer text (they appear after ---)
+  const extractFollowUps = (answer: string): { cleanAnswer: string; followUps: string[] } => {
+    const followUps: string[] = []
+
+    if (!answer.includes('\n---')) {
+      return { cleanAnswer: answer, followUps }
+    }
+
+    const parts = answer.split('\n---')
+    const cleanAnswer = parts[0].trim()
+    const followUpText = parts[1] || ''
+
+    for (const line of followUpText.split('\n')) {
+      const trimmed = line.trim()
+      if (trimmed && (trimmed.startsWith('-') || trimmed.startsWith('•') || /^\d/.test(trimmed))) {
+        const clean = trimmed.replace(/^[-•\d.)\s]+/, '').trim()
+        if (clean && clean.includes('?')) {
+          followUps.push(clean)
+        }
+      }
+    }
+
+    return { cleanAnswer, followUps: followUps.slice(0, 3) }
+  }
+
   const handleSubmit = async (q: string) => {
     if (!q.trim()) return
 
@@ -85,13 +110,16 @@ export default function Home() {
           setStreamingAnswer(prev => prev + token)
         },
         onDone: () => {
+          // Extract follow-ups and clean the answer
+          const { cleanAnswer, followUps } = extractFollowUps(finalAnswer)
+
           // Add to thread when done
           setThread(prev => [...prev, {
             question: q.trim(),
             response: {
-              answer: finalAnswer,
+              answer: cleanAnswer,
               citations: finalCitations,
-              follow_ups: [] // Follow-ups are embedded in answer after ---
+              follow_ups: followUps
             }
           }])
           setStreamingAnswer('')
