@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import CitationCard from '@/components/CitationCard'
 import AnswerDisplay from '@/components/AnswerDisplay'
-import { askQuestion, getSources, ChatResponse, SourcesResponse, ConversationTurn } from '@/lib/api'
+import { streamChat, getSources, ChatResponse, Citation, SourcesResponse, ConversationTurn } from '@/lib/api'
 
 const SOURCE_TYPE_LABELS: Record<string, { label: string; icon: string }> = {
   book_chapter: { label: 'Books', icon: '📖' },
@@ -23,6 +23,11 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null)
   const [sources, setSources] = useState<SourcesResponse | null>(null)
   const threadEndRef = useRef<HTMLDivElement>(null)
+
+  // Streaming state
+  const [streamingAnswer, setStreamingAnswer] = useState('')
+  const [streamingCitations, setStreamingCitations] = useState<Citation[]>([])
+  const [currentQuestion, setCurrentQuestion] = useState('')
 
   // Filters
   const [selectedSourceTypes, setSelectedSourceTypes] = useState<string[]>([])
@@ -55,20 +60,54 @@ export default function Home() {
 
     setIsLoading(true)
     setError(null)
+    setStreamingAnswer('')
+    setStreamingCitations([])
+    setCurrentQuestion(q.trim())
+    setQuestion('')
 
-    try {
-      const res = await askQuestion(q.trim(), {
+    let finalAnswer = ''
+    let finalCitations: Citation[] = []
+
+    await streamChat(
+      q.trim(),
+      {
         sourceTypes: selectedSourceTypes.length > 0 ? selectedSourceTypes : undefined,
         authors: selectedAuthors.length > 0 ? selectedAuthors : undefined,
         history: getHistory(),
-      })
-      setThread(prev => [...prev, { question: q.trim(), response: res }])
-      setQuestion('')
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong')
-    } finally {
-      setIsLoading(false)
-    }
+      },
+      {
+        onCitations: (citations) => {
+          finalCitations = citations
+          setStreamingCitations(citations)
+        },
+        onToken: (token) => {
+          finalAnswer += token
+          setStreamingAnswer(prev => prev + token)
+        },
+        onDone: () => {
+          // Add to thread when done
+          setThread(prev => [...prev, {
+            question: q.trim(),
+            response: {
+              answer: finalAnswer,
+              citations: finalCitations,
+              follow_ups: [] // Follow-ups are embedded in answer after ---
+            }
+          }])
+          setStreamingAnswer('')
+          setStreamingCitations([])
+          setCurrentQuestion('')
+          setIsLoading(false)
+        },
+        onError: (errorMsg) => {
+          setError(errorMsg)
+          setStreamingAnswer('')
+          setStreamingCitations([])
+          setCurrentQuestion('')
+          setIsLoading(false)
+        }
+      }
+    )
   }
 
   const handleFormSubmit = (e: React.FormEvent) => {
@@ -321,23 +360,60 @@ export default function Home() {
               </div>
             ))}
 
-            {/* Loading indicator for next response */}
-            {isLoading && (
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-full bg-[#C45A3B]/10 flex items-center justify-center flex-shrink-0">
-                  <span className="text-sm">👤</span>
-                </div>
-                <div className="flex-1">
-                  <p className="text-[#2D2A26] font-medium mb-4">{question}</p>
-                  <div className="p-5 bg-white rounded-xl border border-[#E5E0D8]">
-                    <div className="flex items-center gap-2 text-[#7D756A]">
-                      <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                      </svg>
-                      <span className="text-sm">Thinking...</span>
-                    </div>
+            {/* Streaming response */}
+            {isLoading && currentQuestion && (
+              <div className="space-y-4">
+                {/* Question */}
+                <div className="flex items-start gap-3">
+                  <div className="w-8 h-8 rounded-full bg-[#C45A3B]/10 flex items-center justify-center flex-shrink-0">
+                    <span className="text-sm">👤</span>
                   </div>
+                  <p className="text-[#2D2A26] font-medium pt-1">{currentQuestion}</p>
+                </div>
+
+                {/* Streaming Answer */}
+                <div className="ml-11">
+                  <div className="p-5 bg-white rounded-xl border border-[#E5E0D8]">
+                    {streamingAnswer ? (
+                      <AnswerDisplay
+                        answer={streamingAnswer}
+                        citations={streamingCitations}
+                        onCitationClick={() => {}}
+                      />
+                    ) : (
+                      <div className="flex items-center gap-2 text-[#7D756A]">
+                        <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                        </svg>
+                        <span className="text-sm">Searching knowledge base...</span>
+                      </div>
+                    )}
+                    {streamingAnswer && (
+                      <span className="inline-block w-2 h-4 bg-[#C45A3B] animate-pulse ml-0.5" />
+                    )}
+                  </div>
+
+                  {/* Streaming Sources */}
+                  {streamingCitations.length > 0 && (
+                    <div className="mt-4">
+                      <details className="group" open>
+                        <summary className="text-xs font-medium text-[#7D756A] cursor-pointer hover:text-[#C45A3B] flex items-center gap-1">
+                          <svg className="w-3 h-3 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                          </svg>
+                          {streamingCitations.length} sources found
+                        </summary>
+                        <div className="mt-3 space-y-2">
+                          {streamingCitations.map((citation) => (
+                            <div key={citation.index}>
+                              <CitationCard citation={citation} />
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

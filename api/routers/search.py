@@ -88,6 +88,8 @@ class HybridSearch:
             self.doc_ids = cache['doc_ids']
             self.doc_texts = cache['doc_texts']
             self.doc_metadatas = cache['doc_metadatas']
+            # Build O(1) lookup dict for document retrieval
+            self.doc_id_to_idx = {doc_id: idx for idx, doc_id in enumerate(self.doc_ids)}
         print(f"Loaded BM25 index ({len(self.doc_ids)} docs)")
 
     def _semantic_search(self, query: str, n: int) -> list[tuple[str, float]]:
@@ -168,7 +170,7 @@ class HybridSearch:
         seen_sources = {}  # Track how many results per source title
 
         for doc_id, score in ranked:
-            idx = self.doc_ids.index(doc_id)
+            idx = self.doc_id_to_idx[doc_id]  # O(1) lookup instead of O(n)
             metadata = self.doc_metadatas[idx]
 
             # Single source_type filter (backwards compat)

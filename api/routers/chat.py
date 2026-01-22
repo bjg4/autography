@@ -8,6 +8,7 @@ import os
 from typing import Optional
 
 import anthropic
+from anthropic import AsyncAnthropic
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -16,8 +17,8 @@ from routers.search import get_search_engine
 
 router = APIRouter(prefix="/api", tags=["chat"])
 
-# Initialize Anthropic client
-client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+# Initialize async Anthropic client (doesn't block FastAPI event loop)
+client = AsyncAnthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
 
 SYSTEM_PROMPT = """You synthesize product management wisdom from books, essays, and practitioner conversations.
 
@@ -196,9 +197,9 @@ Here's what I found in the knowledge base:
 {context}"""
     messages.append({"role": "user", "content": user_message})
 
-    # 4. Call Claude to synthesize answer
+    # 4. Call Claude to synthesize answer (async - doesn't block event loop)
     try:
-        response = client.messages.create(
+        response = await client.messages.create(
             model="claude-sonnet-4-20250514",
             max_tokens=1500,
             system=SYSTEM_PROMPT,
@@ -265,14 +266,14 @@ Here's what I found in the knowledge base:
         # First, send citations
         yield f"data: {json.dumps({'type': 'citations', 'data': [c.model_dump() for c in citations]})}\n\n"
 
-        # Then stream the answer
-        with client.messages.stream(
+        # Then stream the answer (async - doesn't block event loop)
+        async with client.messages.stream(
             model="claude-sonnet-4-20250514",
             max_tokens=1500,
             system=SYSTEM_PROMPT,
             messages=[{"role": "user", "content": user_message}]
         ) as stream:
-            for text in stream.text_stream:
+            async for text in stream.text_stream:
                 yield f"data: {json.dumps({'type': 'token', 'data': text})}\n\n"
 
         yield f"data: {json.dumps({'type': 'done'})}\n\n"

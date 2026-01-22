@@ -72,3 +72,77 @@ export async function getSources(): Promise<SourcesResponse> {
 
   return res.json()
 }
+
+export interface StreamCallbacks {
+  onCitations: (citations: Citation[]) => void
+  onToken: (token: string) => void
+  onDone: () => void
+  onError: (error: string) => void
+}
+
+export async function streamChat(
+  question: string,
+  options: ChatOptions = {},
+  callbacks: StreamCallbacks
+): Promise<void> {
+  const { nSources = 8, sourceTypes, authors, history } = options
+
+  try {
+    const res = await fetch(`${API_URL}/api/chat/stream`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        question,
+        n_sources: nSources,
+        source_types: sourceTypes?.length ? sourceTypes : undefined,
+        authors: authors?.length ? authors : undefined,
+        history: history?.length ? history : undefined,
+      }),
+    })
+
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ detail: res.statusText }))
+      throw new Error(error.detail || `Request failed: ${res.statusText}`)
+    }
+
+    const reader = res.body?.getReader()
+    if (!reader) {
+      throw new Error('No response body')
+    }
+
+    const decoder = new TextDecoder()
+    let buffer = ''
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+
+      buffer += decoder.decode(value, { stream: true })
+
+      // Process complete SSE lines
+      const lines = buffer.split('\n')
+      buffer = lines.pop() || '' // Keep incomplete line in buffer
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try {
+            const data = JSON.parse(line.slice(6))
+            if (data.type === 'citations') {
+              callbacks.onCitations(data.data)
+            } else if (data.type === 'token') {
+              callbacks.onToken(data.data)
+            } else if (data.type === 'done') {
+              callbacks.onDone()
+            }
+          } catch {
+            // Ignore malformed JSON
+          }
+        }
+      }
+    }
+  } catch (err) {
+    callbacks.onError(err instanceof Error ? err.message : 'Streaming failed')
+  }
+}
