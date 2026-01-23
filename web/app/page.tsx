@@ -529,13 +529,15 @@ export default function Home() {
                   className="w-full px-4 py-3.5 pr-24 text-[15px] bg-white border border-[#E5E0D8] rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-[#C45A3B]/30 focus:border-[#C45A3B] placeholder:text-[#A89F91] resize-none"
                   disabled={isLoading}
                 />
-                <button
-                  type="submit"
-                  disabled={isLoading || !question.trim()}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 px-4 py-2 bg-[#C45A3B] text-white text-sm font-medium rounded-lg hover:bg-[#a84832] disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  Ask
-                </button>
+                <div className="absolute right-3 inset-y-0 flex items-center">
+                  <button
+                    type="submit"
+                    disabled={isLoading || !question.trim()}
+                    className="px-4 py-2 bg-[#C45A3B] text-white text-sm font-medium rounded-lg hover:bg-[#a84832] disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Ask
+                  </button>
+                </div>
               </div>
             </form>
 
@@ -775,13 +777,15 @@ export default function Home() {
                         rows={1}
                         className="w-full px-4 py-3 pr-24 text-[15px] bg-white border border-[#E5E0D8] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#C45A3B]/30 focus:border-[#C45A3B] placeholder:text-[#A89F91] resize-none"
                       />
-                      <button
-                        type="submit"
-                        disabled={!question.trim()}
-                        className="absolute right-2 bottom-2 px-4 py-2 bg-[#C45A3B] text-white text-sm font-medium rounded-lg hover:bg-[#a84832] disabled:opacity-40 disabled:cursor-not-allowed"
-                      >
-                        Ask
-                      </button>
+                      <div className="absolute right-3 inset-y-0 flex items-center">
+                        <button
+                          type="submit"
+                          disabled={!question.trim()}
+                          className="px-4 py-2 bg-[#C45A3B] text-white text-sm font-medium rounded-lg hover:bg-[#a84832] disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          Ask
+                        </button>
+                      </div>
                     </div>
                   </form>
                 </div>
