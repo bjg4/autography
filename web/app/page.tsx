@@ -284,8 +284,8 @@ export default function Home() {
       setClips(prev => [newClip, ...prev])
       setShowClipButton(false)
 
-      // Track clip event
-      posthog.capture('clip_saved', {
+      // Track clip event (safe if PostHog not initialized)
+      posthog?.capture?.('clip_saved', {
         text_length: textToClip.length,
         has_source: !!matchingCitation,
         source_type: matchingCitation?.source_type,
@@ -362,8 +362,8 @@ export default function Home() {
   const handleSubmit = async (q: string) => {
     if (!q.trim()) return
 
-    // Track search event
-    posthog.capture('search_submitted', {
+    // Track search event (safe if PostHog not initialized)
+    posthog?.capture?.('search_submitted', {
       query: q.trim(),
       is_followup: thread.length > 0,
       thread_depth: thread.length,
