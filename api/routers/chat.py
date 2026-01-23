@@ -206,7 +206,7 @@ Here's what I found in the knowledge base:
     # 4. Call Claude to synthesize answer (async - doesn't block event loop)
     try:
         response = await client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-5-20250929",
             max_tokens=1500,
             system=SYSTEM_PROMPT,
             messages=messages
@@ -289,7 +289,7 @@ Here's what I found in the knowledge base:
 
         # Then stream the answer (async - doesn't block event loop)
         async with client.messages.stream(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-5-20250929",
             max_tokens=1500,
             system=SYSTEM_PROMPT,
             messages=messages
