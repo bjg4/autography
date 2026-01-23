@@ -9,13 +9,16 @@ RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/wh
 COPY api/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code only (data comes from volume)
+# Copy application code
 COPY api/ ./
 
-# Data will be mounted from Railway volume at /data
-# Set environment variables to point to volume
-ENV CHROMA_PATH=/data/chroma_db
-ENV BM25_PATH=/data/bm25_index.pkl
+# Copy and extract compressed data
+COPY data.tar.gz .
+RUN tar -xzf data.tar.gz && rm data.tar.gz
+
+# Set environment variables for data paths
+ENV CHROMA_PATH=/app/chroma_db
+ENV BM25_PATH=/app/bm25_index.pkl
 
 # Railway uses PORT env variable
 ENV PORT=8000
