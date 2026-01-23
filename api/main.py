@@ -3,11 +3,7 @@ FastAPI backend for Autography PM knowledge base search.
 
 Provides REST API endpoints for hybrid search (semantic + BM25).
 """
-print("=== STARTING AUTOGRAPHY API ===", flush=True)
-
 import os
-print(f"Working directory: {os.getcwd()}", flush=True)
-print(f"Directory contents: {os.listdir('.')}", flush=True)
 from contextlib import asynccontextmanager
 from pathlib import Path
 
