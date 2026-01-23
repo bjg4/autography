@@ -28,3 +28,18 @@
 - ChromaDB version must match between local and deployed (currently 1.4.1)
 - Data files hosted on GitHub Releases, downloaded during Docker build
 - See ADR-003 for full data storage strategy
+
+### Performance
+
+- Use uptime monitoring (UptimeRobot) to ping `/health` every 5 min to prevent cold starts
+- Claude model: `claude-sonnet-4-5-20250929`
+- See ADR-004 for performance optimization details
+
+### Common Issues
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| 502 after healthcheck passes | Wrong target port | Set Railway public networking port to 8080 |
+| CORS errors in browser | `NEXT_PUBLIC_API_URL` set | Remove it, only use `BACKEND_URL` |
+| ChromaDB KeyError `_type` | Version mismatch | Match chromadb version in requirements.txt to local |
+| Slow first request | Cold start | Set up uptime ping or upgrade Railway |
