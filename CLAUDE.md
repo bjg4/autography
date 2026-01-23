@@ -43,3 +43,4 @@
 | CORS errors in browser | `NEXT_PUBLIC_API_URL` set | Remove it, only use `BACKEND_URL` |
 | ChromaDB KeyError `_type` | Version mismatch | Match chromadb version in requirements.txt to local |
 | Slow first request | Cold start | Set up uptime ping or upgrade Railway |
+| Vercel deploy fails with cron error | Hobby plan cron limit | Hobby only allows hourly cron; use UptimeRobot for 5-min pings |

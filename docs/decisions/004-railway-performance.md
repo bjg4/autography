@@ -32,6 +32,12 @@ Configure a free service (UptimeRobot or cron-job.org) to ping `https://autograp
 - Similar costs to Railway Pro
 - Migration overhead not justified yet
 
+### 4. Vercel Cron Jobs
+**Rejected.**
+- Hobby plan only supports hourly precision (not 5-minute intervals)
+- Hourly pings insufficient—Railway sleeps after ~15 min inactivity
+- Would require Pro plan ($20/mo) for per-minute cron
+
 ## Implementation
 
 1. Sign up at https://uptimerobot.com (free tier)
