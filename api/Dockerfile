@@ -12,6 +12,9 @@ RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/wh
 COPY api/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Pre-download the sentence transformer model (caches it in the image)
+RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('all-MiniLM-L6-v2')"
+
 # Copy application code
 COPY api/ ./
 
