@@ -875,8 +875,8 @@ export default function Home() {
 
                     <p className="text-sm text-[#3D3833] leading-relaxed pr-8">{clip.text}</p>
 
-                    {/* Actions */}
-                    <div className="absolute top-3 right-3 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {/* Actions - always visible on mobile, hover on desktop */}
+                    <div className="absolute top-3 right-3 flex items-center gap-1 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                       <button
                         onClick={(e) => { e.stopPropagation(); copyClip(clip) }}
                         className="w-6 h-6 rounded-full bg-white border border-[#E5E0D8] flex items-center justify-center text-[#9A8C7B] hover:text-[#C45A3B] hover:border-[#C45A3B]/50 transition-colors"

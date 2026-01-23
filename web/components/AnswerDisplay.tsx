@@ -23,13 +23,49 @@ function CitationBadge({
   const [showPreview, setShowPreview] = useState(false)
   const [position, setPosition] = useState({ top: 0, left: 0 })
   const buttonRef = useRef<HTMLButtonElement>(null)
+  const previewRef = useRef<HTMLDivElement>(null)
   const [mounted, setMounted] = useState(false)
 
   useEffect(() => {
     setMounted(true)
   }, [])
 
-  const handleMouseEnter = () => {
+  // Close on outside click, scroll, or escape (for mobile tap-to-toggle)
+  useEffect(() => {
+    if (!showPreview) return
+
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as Node
+      if (
+        buttonRef.current && !buttonRef.current.contains(target) &&
+        previewRef.current && !previewRef.current.contains(target)
+      ) {
+        setShowPreview(false)
+      }
+    }
+
+    const handleScroll = () => setShowPreview(false)
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setShowPreview(false)
+    }
+
+    // Delay adding click listener to avoid same-click close
+    const timeoutId = setTimeout(() => {
+      document.addEventListener('click', handleClickOutside)
+    }, 0)
+
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    document.addEventListener('keydown', handleEscape)
+
+    return () => {
+      clearTimeout(timeoutId)
+      document.removeEventListener('click', handleClickOutside)
+      window.removeEventListener('scroll', handleScroll)
+      document.removeEventListener('keydown', handleEscape)
+    }
+  }, [showPreview])
+
+  const updatePosition = () => {
     if (buttonRef.current) {
       const rect = buttonRef.current.getBoundingClientRect()
       setPosition({
@@ -37,14 +73,27 @@ function CitationBadge({
         left: rect.left + rect.width / 2
       })
     }
+  }
+
+  // Desktop: show on hover
+  const handleMouseEnter = () => {
+    updatePosition()
     setShowPreview(true)
+  }
+
+  // Mobile: toggle on tap
+  const handleClick = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    updatePosition()
+    setShowPreview(prev => !prev)
+    onClick?.()
   }
 
   return (
     <>
       <button
         ref={buttonRef}
-        onClick={onClick}
+        onClick={handleClick}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={() => setShowPreview(false)}
         className="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 mx-0.5 text-xs font-semibold bg-[#C45A3B]/15 text-[#C45A3B] rounded-full hover:bg-[#C45A3B]/25 transition-colors align-middle"
@@ -53,13 +102,14 @@ function CitationBadge({
         {index}
       </button>
 
-      {/* Hover Preview - rendered via portal to avoid nesting issues */}
+      {/* Preview - hover on desktop, tap on mobile */}
       {mounted && showPreview && citation && createPortal(
         <div
-          className="fixed w-72 p-3 bg-white rounded-lg shadow-xl border border-[#E8DDD4] z-[9999] pointer-events-none"
+          ref={previewRef}
+          className="fixed w-[min(18rem,calc(100vw-2rem))] p-3 bg-white rounded-lg shadow-xl border border-[#E8DDD4] z-[9999]"
           style={{
             top: position.top,
-            left: position.left,
+            left: Math.min(Math.max(position.left, 144), window.innerWidth - 144),
             transform: 'translate(-50%, -100%)'
           }}
         >
