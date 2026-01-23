@@ -286,6 +286,7 @@ export default function Home() {
     let cleanAnswer = answer
     let followUpText = ''
 
+    // Try various separators and patterns
     if (answer.includes('\n---')) {
       const parts = answer.split('\n---')
       cleanAnswer = parts[0].trim()
@@ -294,22 +295,33 @@ export default function Home() {
       const parts = answer.split('---')
       cleanAnswer = parts[0].trim()
       followUpText = parts[1] || ''
-    } else if (answer.toLowerCase().includes('follow-up')) {
-      const match = answer.match(/follow[- ]?up[s]?[:\s]*questions?[:\s]*/i)
-      if (match) {
-        const idx = answer.indexOf(match[0])
-        cleanAnswer = answer.slice(0, idx).trim()
-        followUpText = answer.slice(idx + match[0].length)
-      }
     } else {
+      // Match various follow-up patterns including markdown bold
+      const patterns = [
+        /\*\*follow[- ]?up[s]?\s*(threads?\s*to\s*explore|questions?)?[:\s]*\*\*/i,
+        /follow[- ]?up[s]?\s*(threads?\s*to\s*explore|questions?)?[:\s]*/i,
+      ]
+
+      for (const pattern of patterns) {
+        const match = answer.match(pattern)
+        if (match) {
+          const idx = answer.indexOf(match[0])
+          cleanAnswer = answer.slice(0, idx).trim()
+          followUpText = answer.slice(idx + match[0].length)
+          break
+        }
+      }
+    }
+
+    if (!followUpText) {
       return { cleanAnswer: answer, followUps: [] }
     }
 
     const questions = followUpText
-      .split('?')
-      .map(q => q.replace(/^[-•\d.)\s\n]+/, '').trim())
-      .filter(q => q.length > 15)
-      .map(q => q + '?')
+      .split(/[?\n]/)
+      .map(q => q.replace(/^[-•\d.)\s\n*]+/, '').trim())
+      .filter(q => q.length > 15 && !q.startsWith('**'))
+      .map(q => q.endsWith('?') ? q : q + '?')
       .slice(0, 3)
 
     return { cleanAnswer, followUps: questions }
@@ -603,7 +615,7 @@ export default function Home() {
                       )}
 
                       {/* Sources - inline on smaller screens */}
-                      <div className="xl:hidden mt-4">
+                      <div className="lg:hidden mt-4">
                         <details className="group">
                           <summary className="text-xs text-[#9A8C7B] cursor-pointer hover:text-[#7D756A] list-none flex items-center gap-1">
                             <svg className="w-3 h-3 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -621,7 +633,7 @@ export default function Home() {
                     </div>
 
                     {/* Sources - alongside on xl screens, with max-height to prevent dead space */}
-                    <div className="hidden xl:block w-56 flex-shrink-0 self-stretch">
+                    <div className="hidden lg:block w-56 flex-shrink-0 self-stretch">
                       <div className="sticky top-4">
                         <h4 className="text-[10px] font-semibold text-[#9A8C7B] uppercase tracking-wider mb-3">
                           Sources
@@ -680,7 +692,7 @@ export default function Home() {
 
                     {/* Streaming sources - alongside on xl screens */}
                     {streamingCitations.length > 0 && (
-                      <div className="hidden xl:block w-56 flex-shrink-0 self-stretch">
+                      <div className="hidden lg:block w-56 flex-shrink-0 self-stretch">
                         <div className="sticky top-4">
                           <h4 className="text-[10px] font-semibold text-[#9A8C7B] uppercase tracking-wider mb-3">
                             Sources
@@ -701,7 +713,7 @@ export default function Home() {
               {!isLoading && thread.length > 0 && (
                 <div className="pl-11 pt-2">
                   <form onSubmit={handleFormSubmit}>
-                    <div className="relative max-w-[calc(100%-14rem-1.5rem)] xl:max-w-none xl:mr-[15.5rem]">
+                    <div className="relative max-w-[calc(100%-14rem-1.5rem)] lg:max-w-none lg:mr-[15.5rem]">
                       <input
                         type="text"
                         value={question}
