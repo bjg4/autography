@@ -532,7 +532,7 @@ export default function Home() {
                 <button
                   type="submit"
                   disabled={isLoading || !question.trim()}
-                  className="absolute right-2 bottom-2 px-4 py-2 bg-[#C45A3B] text-white text-sm font-medium rounded-lg hover:bg-[#a84832] disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 px-4 py-2 bg-[#C45A3B] text-white text-sm font-medium rounded-lg hover:bg-[#a84832] disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   Ask
                 </button>
@@ -557,6 +557,13 @@ export default function Home() {
                 ))}
               </div>
             </div>
+
+            {/* Footer */}
+            <footer className="mt-16 text-center">
+              <p className="text-[10px] text-[#A89F91] uppercase tracking-widest">
+                Made by GullyGorge in Portland, Ore
+              </p>
+            </footer>
           </div>
         )}
 
