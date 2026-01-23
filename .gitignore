@@ -24,8 +24,7 @@ __pycache__/
 venv/
 .env
 
-# ChromaDB
-chroma_db/
+# ChromaDB (keeping chroma_db/ for deployment)
 *.chromadb
 
 # Node
@@ -50,4 +49,3 @@ Thumbs.db
 .env.local
 .env.production
 *.pem
-bm25_index.pkl

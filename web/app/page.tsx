@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import CitationCard from '@/components/CitationCard'
 import AnswerDisplay from '@/components/AnswerDisplay'
 import { streamChat, getSources, ChatResponse, Citation, SourcesResponse, ConversationTurn } from '@/lib/api'
@@ -13,7 +13,10 @@ interface ThreadItem {
 interface Clip {
   id: string
   text: string
+  question?: string  // The question that generated this response
   source?: string
+  author?: string
+  sourceType?: string
   timestamp: Date
 }
 
@@ -27,7 +30,6 @@ function SourceCard({ citation }: { citation: Citation }) {
   const [expanded, setExpanded] = useState(false)
   const typeConfig = sourceTypeConfig[citation.source_type] || { label: 'Source', color: 'bg-gray-50 text-gray-600' }
 
-  // Get a preview of the content (first ~100 chars)
   const contentPreview = citation.content.slice(0, 120).trim() + (citation.content.length > 120 ? '...' : '')
 
   return (
@@ -38,7 +40,6 @@ function SourceCard({ citation }: { citation: Citation }) {
       onClick={() => !expanded && setExpanded(true)}
     >
       <div className="p-3">
-        {/* Header row */}
         <div className="flex items-start gap-2.5">
           <span className="flex-shrink-0 w-5 h-5 rounded-full bg-[#C45A3B]/10 text-[#C45A3B] flex items-center justify-center text-[10px] font-semibold">
             {citation.index}
@@ -48,9 +49,25 @@ function SourceCard({ citation }: { citation: Citation }) {
               <p className="text-xs font-medium text-[#3D3833] leading-snug">
                 {citation.title || 'Untitled'}
               </p>
-              <span className={`flex-shrink-0 px-1.5 py-0.5 rounded text-[9px] font-medium ${typeConfig.color}`}>
-                {typeConfig.label}
-              </span>
+              <div className="flex items-center gap-1.5">
+                <span className={`flex-shrink-0 px-1.5 py-0.5 rounded text-[9px] font-medium ${typeConfig.color}`}>
+                  {typeConfig.label}
+                </span>
+                {expanded && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setExpanded(false)
+                    }}
+                    className="flex-shrink-0 w-5 h-5 rounded-full bg-[#F5F2ED] hover:bg-[#E5E0D8] flex items-center justify-center transition-colors"
+                    title="Collapse"
+                  >
+                    <svg className="w-3 h-3 text-[#7D756A]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                    </svg>
+                  </button>
+                )}
+              </div>
             </div>
             <p className="text-[10px] text-[#9A8C7B] mt-0.5">
               {citation.author}
@@ -58,28 +75,12 @@ function SourceCard({ citation }: { citation: Citation }) {
           </div>
         </div>
 
-        {/* Content preview */}
         <div className="mt-2 ml-7">
           <p className={`text-[11px] text-[#5D574E] leading-relaxed ${expanded ? '' : 'line-clamp-2'}`}>
             {expanded ? citation.content : contentPreview}
           </p>
         </div>
       </div>
-
-      {/* Expanded footer */}
-      {expanded && (
-        <div className="px-3 pb-3 pt-1 border-t border-[#E5E0D8]/60 mt-2">
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              setExpanded(false)
-            }}
-            className="text-[10px] text-[#9A8C7B] hover:text-[#C45A3B] transition-colors"
-          >
-            Show less
-          </button>
-        </div>
-      )}
     </div>
   )
 }
@@ -97,8 +98,9 @@ export default function Home() {
   const [streamingCitations, setStreamingCitations] = useState<Citation[]>([])
   const [currentQuestion, setCurrentQuestion] = useState('')
 
-  // All citations from the conversation (for sidebar)
-  const [allCitations, setAllCitations] = useState<Citation[]>([])
+  // Track which response is currently visible (for sidebar)
+  const [visibleResponseIndex, setVisibleResponseIndex] = useState<number>(-1)
+  const responseRefs = useRef<(HTMLDivElement | null)[]>([])
 
   // Clips state
   const [clips, setClips] = useState<Clip[]>([])
@@ -108,6 +110,7 @@ export default function Home() {
   const [clipButtonPos, setClipButtonPos] = useState({ x: 0, y: 0 })
   const [selectedText, setSelectedText] = useState('')
   const [justClipped, setJustClipped] = useState<string | null>(null)
+  const [drawerExpanded, setDrawerExpanded] = useState(false)
 
   // Track seen citations for O(1) deduplication
   const seenCitationsRef = useRef<Set<string>>(new Set())
@@ -125,7 +128,7 @@ export default function Home() {
     setClipsLoaded(true)
   }, [])
 
-  // Save clips to localStorage (only after initial load to avoid race condition)
+  // Save clips to localStorage
   useEffect(() => {
     if (clipsLoaded) {
       localStorage.setItem('autography-clips', JSON.stringify(clips))
@@ -138,21 +141,54 @@ export default function Home() {
       .catch((err) => console.error('Failed to load sources:', err))
   }, [])
 
-  // Scroll to bottom when new content is added
+  // IntersectionObserver to track which response is visible
   useEffect(() => {
-    if (thread.length > 0) {
-      threadEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-    }
-  }, [thread])
+    const observers: IntersectionObserver[] = []
 
-  // Handle text selection for clipping (only in clip mode)
+    responseRefs.current.forEach((ref, index) => {
+      if (ref) {
+        const observer = new IntersectionObserver(
+          (entries) => {
+            entries.forEach((entry) => {
+              if (entry.isIntersecting && entry.intersectionRatio > 0.3) {
+                setVisibleResponseIndex(index)
+              }
+            })
+          },
+          { threshold: [0.3, 0.5, 0.7], rootMargin: '-100px 0px -100px 0px' }
+        )
+        observer.observe(ref)
+        observers.push(observer)
+      }
+    })
+
+    return () => {
+      observers.forEach(observer => observer.disconnect())
+    }
+  }, [thread.length])
+
+  // Scroll when user submits new question
+  const shouldScrollRef = useRef(false)
+  useEffect(() => {
+    if (shouldScrollRef.current && currentQuestion) {
+      threadEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+      shouldScrollRef.current = false
+    }
+  }, [currentQuestion])
+
+  // Handle text selection for clipping
   useEffect(() => {
     if (!clipMode) {
       setShowClipButton(false)
       return
     }
 
-    const handleSelection = () => {
+    const handleSelection = (e: MouseEvent) => {
+      const target = e.target as HTMLElement
+      if (target.closest('[data-clip-button]')) {
+        return
+      }
+
       const selection = window.getSelection()
       const text = selection?.toString().trim()
 
@@ -173,19 +209,36 @@ export default function Home() {
     return () => document.removeEventListener('mouseup', handleSelection)
   }, [clipMode])
 
-  const handleClip = () => {
-    if (selectedText) {
+  const handleClip = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    const textToClip = selectedText
+    if (textToClip) {
+      // Find the current question context
+      const currentQ = isLoading ? currentQuestion : (thread[visibleResponseIndex]?.question || thread[thread.length - 1]?.question)
+
+      // Try to find which citation this text came from
+      const currentCitations = isLoading ? streamingCitations : (thread[visibleResponseIndex]?.response.citations || [])
+      const matchingCitation = currentCitations.find(c =>
+        c.content.toLowerCase().includes(textToClip.toLowerCase().slice(0, 50))
+      )
+
       const newClip: Clip = {
         id: Date.now().toString(),
-        text: selectedText,
+        text: textToClip,
+        question: currentQ,
+        source: matchingCitation?.title,
+        author: matchingCitation?.author,
+        sourceType: matchingCitation?.source_type,
         timestamp: new Date(),
       }
       setClips(prev => [newClip, ...prev])
       setShowClipButton(false)
-      setJustClipped(selectedText)
+      setSelectedText('')
+      setJustClipped(textToClip)
       window.getSelection()?.removeAllRanges()
 
-      // Show confirmation briefly
       setTimeout(() => setJustClipped(null), 2000)
     }
   }
@@ -194,7 +247,34 @@ export default function Home() {
     setClips(prev => prev.filter(c => c.id !== id))
   }
 
-  // Build history from thread for context
+  const copyClip = async (clip: Clip) => {
+    await navigator.clipboard.writeText(clip.text)
+  }
+
+  const exportClips = () => {
+    const text = clips.map(c => {
+      let entry = `"${c.text}"`
+      if (c.source) entry += `\n— ${c.source}`
+      if (c.author) entry += `, ${c.author}`
+      if (c.question) entry += `\n(From: "${c.question}")`
+      return entry
+    }).join('\n\n---\n\n')
+
+    const blob = new Blob([text], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'autography-clips.txt'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const clearAllClips = () => {
+    if (confirm('Clear all clips?')) {
+      setClips([])
+    }
+  }
+
   const getHistory = (): ConversationTurn[] => {
     return thread.map(item => ({
       question: item.question,
@@ -202,12 +282,10 @@ export default function Home() {
     }))
   }
 
-  // Extract follow-up questions from answer text
   const extractFollowUps = (answer: string): { cleanAnswer: string; followUps: string[] } => {
     let cleanAnswer = answer
     let followUpText = ''
 
-    // Try different separator patterns
     if (answer.includes('\n---')) {
       const parts = answer.split('\n---')
       cleanAnswer = parts[0].trim()
@@ -227,7 +305,6 @@ export default function Home() {
       return { cleanAnswer: answer, followUps: [] }
     }
 
-    // Split by question marks to get individual questions
     const questions = followUpText
       .split('?')
       .map(q => q.replace(/^[-•\d.)\s\n]+/, '').trim())
@@ -241,6 +318,7 @@ export default function Home() {
   const handleSubmit = async (q: string) => {
     if (!q.trim()) return
 
+    shouldScrollRef.current = true
     setIsLoading(true)
     setError(null)
     setStreamingAnswer('')
@@ -253,28 +331,11 @@ export default function Home() {
 
     await streamChat(
       q.trim(),
-      {
-        history: getHistory(),
-      },
+      { history: getHistory() },
       {
         onCitations: (citations) => {
           finalCitations = citations
           setStreamingCitations(citations)
-          // Add to all citations for sidebar with O(1) deduplication
-          setAllCitations(prev => {
-            const newCitations: Citation[] = []
-            for (const c of citations) {
-              const key = `${c.title}|${c.author}`
-              if (!seenCitationsRef.current.has(key)) {
-                seenCitationsRef.current.add(key)
-                newCitations.push(c)
-              }
-            }
-            if (newCitations.length === 0) return prev
-            // Cap at 100 citations to prevent unbounded growth
-            const combined = [...prev, ...newCitations]
-            return combined.slice(-100)
-          })
         },
         onToken: (token) => {
           finalAnswer += token
@@ -292,9 +353,10 @@ export default function Home() {
             }
           }])
           setStreamingAnswer('')
-          setStreamingCitations([])
           setCurrentQuestion('')
           setIsLoading(false)
+          // Set visible to the new response
+          setVisibleResponseIndex(thread.length)
         },
         onError: (errorMsg) => {
           setError(errorMsg)
@@ -314,13 +376,37 @@ export default function Home() {
 
   const startNewThread = () => {
     setThread([])
-    setAllCitations([])
+    setStreamingCitations([])
     seenCitationsRef.current.clear()
     setQuestion('')
     setError(null)
+    setVisibleResponseIndex(-1)
   }
 
   const hasContent = thread.length > 0 || isLoading
+
+  // Get citations for the sidebar based on what's visible
+  const getSidebarCitations = (): { citations: Citation[]; label: string } => {
+    if (isLoading && streamingCitations.length > 0) {
+      return { citations: streamingCitations, label: currentQuestion }
+    }
+    if (visibleResponseIndex >= 0 && thread[visibleResponseIndex]) {
+      return {
+        citations: thread[visibleResponseIndex].response.citations,
+        label: thread[visibleResponseIndex].question
+      }
+    }
+    if (thread.length > 0) {
+      const lastIdx = thread.length - 1
+      return {
+        citations: thread[lastIdx].response.citations,
+        label: thread[lastIdx].question
+      }
+    }
+    return { citations: [], label: '' }
+  }
+
+  const { citations: sidebarCitations, label: sidebarLabel } = getSidebarCitations()
 
   return (
     <main className={`min-h-screen bg-[#FDFBF7] ${clipMode ? 'cursor-crosshair' : ''}`}>
@@ -340,9 +426,10 @@ export default function Home() {
         </div>
       )}
 
-      {/* Clip Button (floating, only in clip mode) */}
+      {/* Clip Button */}
       {showClipButton && clipMode && (
         <button
+          data-clip-button
           onClick={handleClip}
           style={{ left: clipButtonPos.x, top: clipButtonPos.y }}
           className="fixed z-50 -translate-x-1/2 -translate-y-full px-3 py-1.5 bg-[#C45A3B] text-white rounded-lg shadow-lg flex items-center gap-1.5 text-xs font-medium hover:bg-[#a84832] transition-colors"
@@ -354,9 +441,9 @@ export default function Home() {
         </button>
       )}
 
-      {/* Clipped confirmation toast */}
+      {/* Clipped toast */}
       {justClipped && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-[#2D2A26] text-white rounded-lg shadow-lg flex items-center gap-2 text-sm animate-pulse">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-[#2D2A26] text-white rounded-lg shadow-lg flex items-center gap-2 text-sm">
           <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
           </svg>
@@ -364,25 +451,25 @@ export default function Home() {
         </div>
       )}
 
-      <div className={`mx-auto px-4 py-8 ${hasContent ? 'max-w-5xl' : 'max-w-3xl'} ${clipMode ? 'pt-16' : ''}`}>
-        {/* Header */}
-        <header className={`mb-8 ${hasContent ? '' : 'text-center'}`}>
-          <h1 className="text-3xl font-semibold text-[#2D2A26] tracking-tight">
-            Autography
-          </h1>
-          <p className="text-[#7D756A] mt-2">
-            Product management wisdom from the people who shaped it
-          </p>
-          {sources && !hasContent && (
-            <p className="text-xs text-[#A89F91] mt-2">
-              {sources.stats.total_documents} passages · {sources.authors.length} voices
-            </p>
-          )}
-        </header>
-
-        {/* Initial Search */}
+      <div className={`mx-auto px-4 py-8 ${clipMode ? 'pt-16' : ''}`}>
+        {/* Initial state - centered, narrower */}
         {!hasContent && (
-          <>
+          <div className="max-w-3xl mx-auto">
+            {/* Header */}
+            <header className="mb-8 text-center">
+              <h1 className="text-3xl font-semibold text-[#2D2A26] tracking-tight">
+                Autography
+              </h1>
+              <p className="text-[#7D756A] mt-2">
+                Product management wisdom from the people who shaped it
+              </p>
+              {sources && (
+                <p className="text-xs text-[#A89F91] mt-2">
+                  {sources.stats.total_documents} passages · {sources.authors.length} voices
+                </p>
+              )}
+            </header>
+
             <form onSubmit={handleFormSubmit} className="mb-6">
               <div className="relative">
                 <input
@@ -421,54 +508,72 @@ export default function Home() {
                 ))}
               </div>
             </div>
-          </>
+          </div>
         )}
 
-        {/* Content layout when there's content */}
+        {/* Content layout - response+sources as one centered unit */}
         {hasContent && (
-          <div className="flex gap-8 justify-center">
-            {/* Main Chat - centered */}
-            <div className="w-full max-w-2xl">
-              {/* Action buttons */}
-              <div className="mb-6 flex items-center gap-2">
-                <button
-                  onClick={startNewThread}
-                  className="px-3 py-1.5 text-xs text-[#7D756A] hover:text-[#C45A3B] border border-[#E5E0D8] rounded-lg hover:border-[#C45A3B]/50"
-                >
-                  + New thread
-                </button>
-                <button
-                  onClick={() => setClipMode(true)}
-                  className="px-3 py-1.5 text-xs text-[#7D756A] hover:text-[#C45A3B] border border-[#E5E0D8] rounded-lg hover:border-[#C45A3B]/50 flex items-center gap-1.5"
-                >
-                  <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.121 14.121L19 19m-7-7l7-7m-7 7l-2.879 2.879M12 12L9.121 9.121m0 5.758a3 3 0 10-4.243 4.243 3 3 0 004.243-4.243zm0 0L12 12" />
-                  </svg>
-                  Clip
-                </button>
+          <div className="max-w-[920px] mx-auto">
+            {/* Header (compact) */}
+            <header className="mb-6">
+              <h1 className="text-2xl font-semibold text-[#2D2A26] tracking-tight">
+                Autography
+              </h1>
+              <p className="text-sm text-[#7D756A] mt-1">
+                Product management wisdom from the people who shaped it
+              </p>
+            </header>
+
+            {/* Action buttons */}
+            <div className="mb-6 flex items-center gap-2">
+              <button
+                onClick={startNewThread}
+                className="px-3 py-1.5 text-xs text-[#7D756A] hover:text-[#C45A3B] border border-[#E5E0D8] rounded-lg hover:border-[#C45A3B]/50"
+              >
+                + New thread
+              </button>
+              <button
+                onClick={() => setClipMode(true)}
+                className="px-3 py-1.5 text-xs text-[#7D756A] hover:text-[#C45A3B] border border-[#E5E0D8] rounded-lg hover:border-[#C45A3B]/50 flex items-center gap-1.5"
+              >
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.121 14.121L19 19m-7-7l7-7m-7 7l-2.879 2.879M12 12L9.121 9.121m0 5.758a3 3 0 10-4.243 4.243 3 3 0 004.243-4.243zm0 0L12 12" />
+                </svg>
+                Clip
+                {clips.length > 0 && (
+                  <span className="ml-1 px-1.5 py-0.5 bg-[#C45A3B]/10 text-[#C45A3B] rounded-full text-[10px] font-medium">
+                    {clips.length}
+                  </span>
+                )}
+              </button>
+            </div>
+
+            {/* Error */}
+            {error && (
+              <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                {error}
               </div>
+            )}
 
-              {/* Error */}
-              {error && (
-                <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-                  {error}
-                </div>
-              )}
-
-              {/* Thread */}
-              <div className="space-y-6">
-                {thread.map((item, idx) => (
-                  <div key={idx} className="space-y-4">
-                    {/* Question */}
-                    <div className="flex items-start gap-3">
-                      <div className="w-8 h-8 rounded-full bg-[#C45A3B]/10 flex items-center justify-center flex-shrink-0">
-                        <span className="text-sm">👤</span>
-                      </div>
-                      <p className="text-[#2D2A26] font-medium pt-1">{item.question}</p>
+            {/* Thread - each response+sources as one unit */}
+            <div className="space-y-10">
+              {thread.map((item, idx) => (
+                <div
+                  key={idx}
+                  ref={el => { responseRefs.current[idx] = el }}
+                >
+                  {/* Question - outside the flex row */}
+                  <div className="flex items-start gap-3 mb-3">
+                    <div className="w-8 h-8 rounded-full bg-[#C45A3B]/10 flex items-center justify-center flex-shrink-0">
+                      <span className="text-sm">👤</span>
                     </div>
+                    <p className="text-[#2D2A26] font-medium pt-1">{item.question}</p>
+                  </div>
 
+                  {/* Answer + Sources row - aligned */}
+                  <div className="flex gap-6 items-start ml-11">
                     {/* Answer */}
-                    <div className="ml-11">
+                    <div className="flex-1 min-w-0">
                       <div className="p-5 bg-white rounded-xl border border-[#E5E0D8]">
                         <AnswerDisplay
                           answer={item.response.answer}
@@ -496,23 +601,61 @@ export default function Home() {
                           </div>
                         </div>
                       )}
-                    </div>
 
-                    {idx < thread.length - 1 && <div className="border-t border-[#E5E0D8]" />}
-                  </div>
-                ))}
-
-                {/* Streaming response */}
-                {isLoading && currentQuestion && (
-                  <div className="space-y-4">
-                    <div className="flex items-start gap-3">
-                      <div className="w-8 h-8 rounded-full bg-[#C45A3B]/10 flex items-center justify-center flex-shrink-0">
-                        <span className="text-sm">👤</span>
+                      {/* Sources - inline on smaller screens */}
+                      <div className="xl:hidden mt-4">
+                        <details className="group">
+                          <summary className="text-xs text-[#9A8C7B] cursor-pointer hover:text-[#7D756A] list-none flex items-center gap-1">
+                            <svg className="w-3 h-3 transition-transform group-open:rotate-90" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                            {item.response.citations.length} sources
+                          </summary>
+                          <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                            {item.response.citations.map((citation, cidx) => (
+                              <SourceCard key={`inline-${idx}-${cidx}`} citation={citation} />
+                            ))}
+                          </div>
+                        </details>
                       </div>
-                      <p className="text-[#2D2A26] font-medium pt-1">{currentQuestion}</p>
                     </div>
 
-                    <div className="ml-11">
+                    {/* Sources - alongside on xl screens, with max-height to prevent dead space */}
+                    <div className="hidden xl:block w-56 flex-shrink-0 self-stretch">
+                      <div className="sticky top-4">
+                        <h4 className="text-[10px] font-semibold text-[#9A8C7B] uppercase tracking-wider mb-3">
+                          Sources
+                        </h4>
+                        <div className="space-y-2.5 max-h-[calc(100vh-8rem)] overflow-y-auto pr-1">
+                          {item.response.citations.map((citation, cidx) => (
+                            <SourceCard key={`${idx}-${cidx}`} citation={citation} />
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {idx < thread.length - 1 && (
+                    <div className="border-t border-[#E5E0D8] mt-8" />
+                  )}
+                </div>
+              ))}
+
+              {/* Streaming response */}
+              {isLoading && currentQuestion && (
+                <div>
+                  {/* Question - outside the flex row */}
+                  <div className="flex items-start gap-3 mb-3">
+                    <div className="w-8 h-8 rounded-full bg-[#C45A3B]/10 flex items-center justify-center flex-shrink-0">
+                      <span className="text-sm">👤</span>
+                    </div>
+                    <p className="text-[#2D2A26] font-medium pt-1">{currentQuestion}</p>
+                  </div>
+
+                  {/* Answer + Sources row - aligned */}
+                  <div className="flex gap-6 items-start ml-11">
+                    {/* Answer */}
+                    <div className="flex-1 min-w-0">
                       <div className="p-5 bg-white rounded-xl border border-[#E5E0D8]">
                         {streamingAnswer ? (
                           <>
@@ -534,92 +677,162 @@ export default function Home() {
                         )}
                       </div>
                     </div>
-                  </div>
-                )}
 
-                {/* Follow-up input */}
-                {!isLoading && thread.length > 0 && (
-                  <div className="ml-11 pt-2">
-                    <form onSubmit={handleFormSubmit}>
-                      <div className="relative">
-                        <input
-                          type="text"
-                          value={question}
-                          onChange={(e) => setQuestion(e.target.value)}
-                          placeholder="Ask a follow-up question..."
-                          className="w-full px-4 py-3 text-[15px] bg-white border border-[#E5E0D8] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#C45A3B]/30 focus:border-[#C45A3B] placeholder:text-[#A89F91]"
-                        />
-                        <button
-                          type="submit"
-                          disabled={!question.trim()}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 px-4 py-2 bg-[#C45A3B] text-white text-sm font-medium rounded-lg hover:bg-[#a84832] disabled:opacity-40 disabled:cursor-not-allowed"
-                        >
-                          Ask
-                        </button>
-                      </div>
-                    </form>
-                  </div>
-                )}
-
-                <div ref={threadEndRef} />
-              </div>
-            </div>
-
-            {/* Floating Source Cards - sticky as you scroll */}
-            {(allCitations.length > 0 || clips.length > 0) && (
-              <div className="hidden lg:block w-64 flex-shrink-0">
-                <div className="sticky top-8 pt-12 max-h-[calc(100vh-4rem)] overflow-y-auto">
-                {/* Clips section */}
-                {clips.length > 0 && (
-                  <div className="mb-6">
-                    <h4 className="text-[10px] font-semibold text-[#9A8C7B] uppercase tracking-wider mb-3">
-                      Clips
-                    </h4>
-                    <div className="space-y-2.5">
-                      {clips.map((clip) => (
-                        <div
-                          key={clip.id}
-                          className="bg-white rounded-xl p-3 shadow-sm border border-[#E5E0D8]/60 group relative"
-                        >
-                          <div className="flex items-start gap-2">
-                            <svg className="w-3.5 h-3.5 text-[#C45A3B] flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.121 14.121L19 19m-7-7l7-7m-7 7l-2.879 2.879M12 12L9.121 9.121m0 5.758a3 3 0 10-4.243 4.243 3 3 0 004.243-4.243zm0 0L12 12" />
-                            </svg>
-                            <p className="text-xs text-[#5D574E] line-clamp-3 leading-relaxed">{clip.text}</p>
+                    {/* Streaming sources - alongside on xl screens */}
+                    {streamingCitations.length > 0 && (
+                      <div className="hidden xl:block w-56 flex-shrink-0 self-stretch">
+                        <div className="sticky top-4">
+                          <h4 className="text-[10px] font-semibold text-[#9A8C7B] uppercase tracking-wider mb-3">
+                            Sources
+                          </h4>
+                          <div className="space-y-2.5 max-h-[calc(100vh-8rem)] overflow-y-auto pr-1">
+                            {streamingCitations.map((citation, cidx) => (
+                              <SourceCard key={`streaming-${cidx}`} citation={citation} />
+                            ))}
                           </div>
-                          <button
-                            onClick={() => removeClip(clip.id)}
-                            className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 text-[#9A8C7B] hover:text-red-500 transition-opacity"
-                          >
-                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                            </svg>
-                          </button>
                         </div>
-                      ))}
-                    </div>
+                      </div>
+                    )}
                   </div>
-                )}
-
-                {/* Sources section */}
-                {(isLoading ? streamingCitations.length > 0 : allCitations.length > 0) && (
-                  <div>
-                    <h4 className="text-[10px] font-semibold text-[#9A8C7B] uppercase tracking-wider mb-3">
-                      Sources
-                    </h4>
-                    <div className="space-y-2.5">
-                      {(isLoading ? streamingCitations : allCitations).map((citation, idx) => (
-                        <SourceCard key={`${citation.title}-${idx}`} citation={citation} />
-                      ))}
-                    </div>
-                  </div>
-                )}
                 </div>
-              </div>
-            )}
+              )}
+
+              {/* Follow-up input */}
+              {!isLoading && thread.length > 0 && (
+                <div className="pl-11 pt-2">
+                  <form onSubmit={handleFormSubmit}>
+                    <div className="relative max-w-[calc(100%-14rem-1.5rem)] xl:max-w-none xl:mr-[15.5rem]">
+                      <input
+                        type="text"
+                        value={question}
+                        onChange={(e) => setQuestion(e.target.value)}
+                        placeholder="Ask a follow-up question..."
+                        className="w-full px-4 py-3 text-[15px] bg-white border border-[#E5E0D8] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#C45A3B]/30 focus:border-[#C45A3B] placeholder:text-[#A89F91]"
+                      />
+                      <button
+                        type="submit"
+                        disabled={!question.trim()}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 px-4 py-2 bg-[#C45A3B] text-white text-sm font-medium rounded-lg hover:bg-[#a84832] disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        Ask
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              )}
+
+              <div ref={threadEndRef} />
+            </div>
           </div>
         )}
       </div>
+
+      {/* Floating Clips Drawer */}
+      {clips.length > 0 && (
+        <div className={`fixed bottom-0 left-0 right-0 z-30 transition-transform duration-300 ${drawerExpanded ? 'translate-y-0' : 'translate-y-[calc(100%-2.75rem)]'}`}>
+          {/* Drawer header */}
+          <div
+            className="bg-white border-t border-x border-[#E5E0D8] text-[#3D3833] px-4 py-2 flex items-center justify-between cursor-pointer rounded-t-xl mx-4 md:mx-auto md:max-w-3xl shadow-[0_-4px_20px_rgba(0,0,0,0.08)]"
+            onClick={() => setDrawerExpanded(!drawerExpanded)}
+          >
+            <div className="flex items-center gap-2">
+              <svg className="w-4 h-4 text-[#C45A3B]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.121 14.121L19 19m-7-7l7-7m-7 7l-2.879 2.879M12 12L9.121 9.121m0 5.758a3 3 0 10-4.243 4.243 3 3 0 004.243-4.243zm0 0L12 12" />
+              </svg>
+              <span className="text-sm font-medium">Your Clips</span>
+              <span className="px-1.5 py-0.5 bg-[#C45A3B]/10 text-[#C45A3B] rounded text-xs font-medium">{clips.length}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              {drawerExpanded && (
+                <>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); exportClips() }}
+                    className="px-2 py-1 text-[10px] text-[#7D756A] hover:text-[#C45A3B] border border-[#E5E0D8] rounded hover:border-[#C45A3B]/50"
+                  >
+                    Export
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); clearAllClips() }}
+                    className="px-2 py-1 text-[10px] text-[#7D756A] hover:text-red-500 border border-[#E5E0D8] rounded hover:border-red-200"
+                  >
+                    Clear
+                  </button>
+                </>
+              )}
+              <svg
+                className={`w-5 h-5 text-[#9A8C7B] transition-transform ${drawerExpanded ? 'rotate-180' : ''}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+              </svg>
+            </div>
+          </div>
+
+          {/* Drawer content */}
+          <div className="bg-white border-x border-[#E5E0D8] px-4 pb-4 mx-4 md:mx-auto md:max-w-3xl shadow-[0_-4px_20px_rgba(0,0,0,0.08)] max-h-80 overflow-y-auto">
+            <div className="space-y-3 pt-3">
+              {clips.map((clip) => {
+                const typeConfig = clip.sourceType ? sourceTypeConfig[clip.sourceType] : null
+                return (
+                  <div
+                    key={clip.id}
+                    className="bg-[#F9F7F4] rounded-xl p-4 group relative border border-[#E5E0D8]/60"
+                  >
+                    {/* Question context */}
+                    {clip.question && (
+                      <div className="mb-2 pb-2 border-b border-[#E5E0D8]/60">
+                        <p className="text-[10px] text-[#9A8C7B]">
+                          From: "{clip.question}"
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Source info */}
+                    {(clip.source || clip.author) && (
+                      <div className="flex items-center gap-2 mb-2">
+                        {typeConfig && (
+                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${typeConfig.color}`}>
+                            {typeConfig.label}
+                          </span>
+                        )}
+                        <span className="text-[10px] text-[#9A8C7B] truncate">
+                          {clip.source && clip.author ? `${clip.source} · ${clip.author}` : clip.source || clip.author}
+                        </span>
+                      </div>
+                    )}
+
+                    <p className="text-sm text-[#3D3833] leading-relaxed pr-8">{clip.text}</p>
+
+                    {/* Actions */}
+                    <div className="absolute top-3 right-3 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); copyClip(clip) }}
+                        className="w-6 h-6 rounded-full bg-white border border-[#E5E0D8] flex items-center justify-center text-[#9A8C7B] hover:text-[#C45A3B] hover:border-[#C45A3B]/50 transition-colors"
+                        title="Copy"
+                      >
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                        </svg>
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); removeClip(clip.id) }}
+                        className="w-6 h-6 rounded-full bg-white border border-[#E5E0D8] flex items-center justify-center text-[#9A8C7B] hover:text-red-500 hover:border-red-200 transition-colors"
+                        title="Remove"
+                      >
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   )
 }
