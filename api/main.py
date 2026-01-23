@@ -21,6 +21,36 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from routers import search, chat
 
+
+def init_phoenix_tracing():
+    """Initialize Arize Phoenix for LLM observability."""
+    phoenix_api_key = os.environ.get("PHOENIX_API_KEY")
+    if not phoenix_api_key:
+        print("PHOENIX_API_KEY not set - LLM tracing disabled")
+        return False
+
+    try:
+        from phoenix.otel import register
+        from openinference.instrumentation.anthropic import AnthropicInstrumentor
+
+        # Configure Phoenix endpoint
+        endpoint = os.environ.get("PHOENIX_COLLECTOR_ENDPOINT", "https://app.phoenix.arize.com")
+        os.environ["PHOENIX_COLLECTOR_ENDPOINT"] = endpoint
+        os.environ["PHOENIX_CLIENT_HEADERS"] = f"api_key={phoenix_api_key}"
+
+        # Register tracer and instrument Anthropic
+        tracer_provider = register(project_name="autography")
+        AnthropicInstrumentor().instrument(tracer_provider=tracer_provider)
+
+        print(f"Phoenix tracing enabled → {endpoint}")
+        return True
+    except ImportError as e:
+        print(f"Phoenix packages not installed: {e}")
+        return False
+    except Exception as e:
+        print(f"Phoenix initialization failed: {e}")
+        return False
+
 # Rate limiter setup
 limiter = Limiter(key_func=get_remote_address)
 
@@ -39,7 +69,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Load search engine on startup."""
+    """Load search engine and observability on startup."""
+    # Initialize LLM observability first (before any Anthropic client is used)
+    init_phoenix_tracing()
+
     # Get paths from environment or use defaults
     chroma_path = os.environ.get('CHROMA_PATH', str(Path(__file__).parent.parent / 'chroma_db'))
     bm25_path = os.environ.get('BM25_PATH', str(Path(__file__).parent.parent / 'bm25_index.pkl'))
