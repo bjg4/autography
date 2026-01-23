@@ -17,7 +17,9 @@
 ### Vercel (Frontend)
 
 - Root directory: `web/`
-- Environment variable: `NEXT_PUBLIC_API_URL=https://autography-production.up.railway.app`
+- Environment variable: `BACKEND_URL=https://autography-production.up.railway.app`
+- The frontend proxies API calls through Next.js API routes to the Railway backend
+- Set env var in Vercel Dashboard → Settings → Environment Variables (not in .env files)
 
 ### Data Storage
 
