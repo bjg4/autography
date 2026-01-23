@@ -484,18 +484,32 @@ export default function Home() {
 
             <form onSubmit={handleFormSubmit} className="mb-6">
               <div className="relative">
-                <input
-                  type="text"
+                <textarea
                   value={question}
-                  onChange={(e) => setQuestion(e.target.value)}
+                  onChange={(e) => {
+                    setQuestion(e.target.value)
+                    // Auto-resize textarea
+                    e.target.style.height = 'auto'
+                    e.target.style.height = Math.min(e.target.scrollHeight, 150) + 'px'
+                  }}
+                  onKeyDown={(e) => {
+                    // Submit on Enter (without Shift)
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault()
+                      if (question.trim() && !isLoading) {
+                        handleFormSubmit(e as unknown as React.FormEvent)
+                      }
+                    }
+                  }}
                   placeholder="Ask anything about product management..."
-                  className="w-full px-4 py-3.5 text-[15px] bg-white border border-[#E5E0D8] rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-[#C45A3B]/30 focus:border-[#C45A3B] placeholder:text-[#A89F91]"
+                  rows={1}
+                  className="w-full px-4 py-3.5 pr-20 text-[15px] bg-white border border-[#E5E0D8] rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-[#C45A3B]/30 focus:border-[#C45A3B] placeholder:text-[#A89F91] resize-none overflow-hidden"
                   disabled={isLoading}
                 />
                 <button
                   type="submit"
                   disabled={isLoading || !question.trim()}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 px-4 py-2 bg-[#C45A3B] text-white text-sm font-medium rounded-lg hover:bg-[#a84832] disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="absolute right-2 bottom-2 px-4 py-2 bg-[#C45A3B] text-white text-sm font-medium rounded-lg hover:bg-[#a84832] disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   Ask
                 </button>
@@ -574,16 +588,20 @@ export default function Home() {
                   key={idx}
                   ref={el => { responseRefs.current[idx] = el }}
                 >
-                  {/* Question - outside the flex row */}
-                  <div className="flex items-start gap-3 mb-3">
-                    <div className="w-8 h-8 rounded-full bg-[#C45A3B]/10 flex items-center justify-center flex-shrink-0">
-                      <span className="text-sm">👤</span>
+                  {/* Question + Sources row - aligned with response */}
+                  <div className="flex gap-6 items-start">
+                    <div className="flex items-start gap-3 flex-1 min-w-0">
+                      <div className="w-8 h-8 rounded-full bg-[#C45A3B]/10 flex items-center justify-center flex-shrink-0">
+                        <span className="text-sm">👤</span>
+                      </div>
+                      <p className="text-[#2D2A26] font-medium pt-1">{item.question}</p>
                     </div>
-                    <p className="text-[#2D2A26] font-medium pt-1">{item.question}</p>
+                    {/* Spacer for sources column alignment */}
+                    <div className="hidden lg:block w-56 flex-shrink-0" />
                   </div>
 
                   {/* Answer + Sources row - aligned */}
-                  <div className="flex gap-6 items-start ml-11">
+                  <div className="flex gap-6 items-start ml-11 mt-3">
                     {/* Answer */}
                     <div className="flex-1 min-w-0">
                       <div className="p-5 bg-white rounded-xl border border-[#E5E0D8]">
@@ -632,16 +650,24 @@ export default function Home() {
                       </div>
                     </div>
 
-                    {/* Sources - alongside on xl screens, with max-height to prevent dead space */}
-                    <div className="hidden lg:block w-56 flex-shrink-0 self-stretch">
+                    {/* Sources - alongside on lg screens */}
+                    <div className="hidden lg:block w-56 flex-shrink-0">
                       <div className="sticky top-4">
                         <h4 className="text-[10px] font-semibold text-[#9A8C7B] uppercase tracking-wider mb-3">
                           Sources
                         </h4>
-                        <div className="space-y-2.5 max-h-[calc(100vh-8rem)] overflow-y-auto pr-1">
-                          {item.response.citations.map((citation, cidx) => (
-                            <SourceCard key={`${idx}-${cidx}`} citation={citation} />
-                          ))}
+                        <div className="relative">
+                          <div
+                            className="space-y-2.5 max-h-[calc(100vh-8rem)] overflow-y-auto pr-1"
+                            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                          >
+                            <style jsx>{`div::-webkit-scrollbar { display: none; }`}</style>
+                            {item.response.citations.map((citation, cidx) => (
+                              <SourceCard key={`${idx}-${cidx}`} citation={citation} />
+                            ))}
+                          </div>
+                          {/* Fade gradient at bottom */}
+                          <div className="absolute bottom-0 left-0 right-1 h-12 bg-gradient-to-t from-[#FDFBF7] to-transparent pointer-events-none" />
                         </div>
                       </div>
                     </div>
@@ -656,16 +682,20 @@ export default function Home() {
               {/* Streaming response */}
               {isLoading && currentQuestion && (
                 <div>
-                  {/* Question - outside the flex row */}
-                  <div className="flex items-start gap-3 mb-3">
-                    <div className="w-8 h-8 rounded-full bg-[#C45A3B]/10 flex items-center justify-center flex-shrink-0">
-                      <span className="text-sm">👤</span>
+                  {/* Question + Sources row - aligned with response */}
+                  <div className="flex gap-6 items-start">
+                    <div className="flex items-start gap-3 flex-1 min-w-0">
+                      <div className="w-8 h-8 rounded-full bg-[#C45A3B]/10 flex items-center justify-center flex-shrink-0">
+                        <span className="text-sm">👤</span>
+                      </div>
+                      <p className="text-[#2D2A26] font-medium pt-1">{currentQuestion}</p>
                     </div>
-                    <p className="text-[#2D2A26] font-medium pt-1">{currentQuestion}</p>
+                    {/* Spacer for sources column alignment */}
+                    <div className="hidden lg:block w-56 flex-shrink-0" />
                   </div>
 
                   {/* Answer + Sources row - aligned */}
-                  <div className="flex gap-6 items-start ml-11">
+                  <div className="flex gap-6 items-start ml-11 mt-3">
                     {/* Answer */}
                     <div className="flex-1 min-w-0">
                       <div className="p-5 bg-white rounded-xl border border-[#E5E0D8]">
@@ -690,17 +720,25 @@ export default function Home() {
                       </div>
                     </div>
 
-                    {/* Streaming sources - alongside on xl screens */}
+                    {/* Streaming sources - alongside on lg screens */}
                     {streamingCitations.length > 0 && (
-                      <div className="hidden lg:block w-56 flex-shrink-0 self-stretch">
+                      <div className="hidden lg:block w-56 flex-shrink-0">
                         <div className="sticky top-4">
                           <h4 className="text-[10px] font-semibold text-[#9A8C7B] uppercase tracking-wider mb-3">
                             Sources
                           </h4>
-                          <div className="space-y-2.5 max-h-[calc(100vh-8rem)] overflow-y-auto pr-1">
-                            {streamingCitations.map((citation, cidx) => (
-                              <SourceCard key={`streaming-${cidx}`} citation={citation} />
-                            ))}
+                          <div className="relative">
+                            <div
+                              className="space-y-2.5 max-h-[calc(100vh-8rem)] overflow-y-auto pr-1"
+                              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                            >
+                              <style jsx>{`div::-webkit-scrollbar { display: none; }`}</style>
+                              {streamingCitations.map((citation, cidx) => (
+                                <SourceCard key={`streaming-${cidx}`} citation={citation} />
+                              ))}
+                            </div>
+                            {/* Fade gradient at bottom */}
+                            <div className="absolute bottom-0 left-0 right-1 h-12 bg-gradient-to-t from-[#FDFBF7] to-transparent pointer-events-none" />
                           </div>
                         </div>
                       </div>
@@ -714,17 +752,31 @@ export default function Home() {
                 <div className="pl-11 pt-2">
                   <form onSubmit={handleFormSubmit}>
                     <div className="relative max-w-[calc(100%-14rem-1.5rem)] lg:max-w-none lg:mr-[15.5rem]">
-                      <input
-                        type="text"
+                      <textarea
                         value={question}
-                        onChange={(e) => setQuestion(e.target.value)}
+                        onChange={(e) => {
+                          setQuestion(e.target.value)
+                          // Auto-resize textarea
+                          e.target.style.height = 'auto'
+                          e.target.style.height = Math.min(e.target.scrollHeight, 150) + 'px'
+                        }}
+                        onKeyDown={(e) => {
+                          // Submit on Enter (without Shift)
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault()
+                            if (question.trim()) {
+                              handleFormSubmit(e as unknown as React.FormEvent)
+                            }
+                          }
+                        }}
                         placeholder="Ask a follow-up question..."
-                        className="w-full px-4 py-3 text-[15px] bg-white border border-[#E5E0D8] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#C45A3B]/30 focus:border-[#C45A3B] placeholder:text-[#A89F91]"
+                        rows={1}
+                        className="w-full px-4 py-3 pr-20 text-[15px] bg-white border border-[#E5E0D8] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#C45A3B]/30 focus:border-[#C45A3B] placeholder:text-[#A89F91] resize-none overflow-hidden"
                       />
                       <button
                         type="submit"
                         disabled={!question.trim()}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 px-4 py-2 bg-[#C45A3B] text-white text-sm font-medium rounded-lg hover:bg-[#a84832] disabled:opacity-40 disabled:cursor-not-allowed"
+                        className="absolute right-2 bottom-2 px-4 py-2 bg-[#C45A3B] text-white text-sm font-medium rounded-lg hover:bg-[#a84832] disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         Ask
                       </button>
