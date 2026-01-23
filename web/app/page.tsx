@@ -684,7 +684,7 @@ export default function Home() {
 
                     {/* Sources - alongside on lg screens */}
                     <div className="hidden lg:flex lg:flex-col w-56 flex-shrink-0">
-                      <h4 className="text-[10px] font-semibold text-[#9A8C7B] uppercase tracking-wider mb-2">
+                      <h4 className="text-[10px] font-semibold text-[#9A8C7B] uppercase tracking-wider mb-2 -mt-6">
                         Sources
                       </h4>
                       <SourcesList citations={item.response.citations} keyPrefix={`${idx}`} />
@@ -741,7 +741,7 @@ export default function Home() {
                     {/* Streaming sources - alongside on lg screens */}
                     {streamingCitations.length > 0 && (
                       <div className="hidden lg:flex lg:flex-col w-56 flex-shrink-0">
-                        <h4 className="text-[10px] font-semibold text-[#9A8C7B] uppercase tracking-wider mb-2">
+                        <h4 className="text-[10px] font-semibold text-[#9A8C7B] uppercase tracking-wider mb-2 -mt-6">
                           Sources
                         </h4>
                         <SourcesList citations={streamingCitations} keyPrefix="streaming" />
