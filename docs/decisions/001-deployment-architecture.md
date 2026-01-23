@@ -73,6 +73,17 @@ We needed to deploy this to production with a budget of ~$5-20/month.
 - Config in `railway.toml`
 - Volumes for persistent data
 - Environment variables: `ANTHROPIC_API_KEY`, `CORS_ORIGINS`
+- **CRITICAL: Public networking target port must be 8080** (Railway's default PORT)
+
+### Railway Port Configuration (Lesson Learned)
+
+Railway injects `PORT=8080` as an environment variable. The app must:
+1. Listen on `0.0.0.0:${PORT:-8080}` (not a hardcoded port)
+2. Have the public networking domain target port set to **8080** in Railway dashboard
+
+**Symptom of misconfiguration:** Healthcheck passes, but all external requests return 502 with `X-Railway-Fallback: true` header.
+
+**Fix:** In Railway dashboard → Service Settings → Public Networking → set Target Port to 8080.
 
 **Vercel:**
 - Root directory: `web/`
