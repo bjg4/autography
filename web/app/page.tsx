@@ -526,14 +526,14 @@ export default function Home() {
                   }}
                   placeholder="Ask anything about product management..."
                   rows={1}
-                  className="w-full px-3 py-3.5 pr-20 md:px-4 md:pr-24 text-[15px] bg-white border border-[#E5E0D8] rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-[#C45A3B]/30 focus:border-[#C45A3B] placeholder:text-[#A89F91] resize-none"
+                  className="w-full px-3 py-3.5 pr-16 md:px-4 md:pr-24 text-base md:text-[15px] bg-white border border-[#E5E0D8] rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-[#C45A3B]/30 focus:border-[#C45A3B] placeholder:text-[#A89F91] resize-none"
                   disabled={isLoading}
                 />
-                <div className="absolute right-2 md:right-3 inset-y-0 flex items-center">
+                <div className="absolute right-1.5 md:right-3 top-1/2 -translate-y-1/2">
                   <button
                     type="submit"
                     disabled={isLoading || !question.trim()}
-                    className="px-3 py-2 md:px-4 bg-[#C45A3B] text-white text-sm font-medium rounded-lg hover:bg-[#a84832] disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="px-2.5 py-1.5 md:px-4 md:py-2 bg-[#C45A3B] text-white text-sm font-medium rounded-lg hover:bg-[#a84832] disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
                   >
                     Ask
                   </button>
@@ -775,13 +775,13 @@ export default function Home() {
                         }}
                         placeholder="Ask a follow-up question..."
                         rows={1}
-                        className="w-full px-3 py-3 pr-20 md:px-4 md:pr-24 text-[15px] bg-white border border-[#E5E0D8] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#C45A3B]/30 focus:border-[#C45A3B] placeholder:text-[#A89F91] resize-none"
+                        className="w-full px-3 py-3 pr-16 md:px-4 md:pr-24 text-base md:text-[15px] bg-white border border-[#E5E0D8] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#C45A3B]/30 focus:border-[#C45A3B] placeholder:text-[#A89F91] resize-none"
                       />
-                      <div className="absolute right-2 md:right-3 inset-y-0 flex items-center">
+                      <div className="absolute right-1.5 md:right-3 top-1/2 -translate-y-1/2">
                         <button
                           type="submit"
                           disabled={!question.trim()}
-                          className="px-3 py-2 md:px-4 bg-[#C45A3B] text-white text-sm font-medium rounded-lg hover:bg-[#a84832] disabled:opacity-40 disabled:cursor-not-allowed"
+                          className="px-2.5 py-1.5 md:px-4 md:py-2 bg-[#C45A3B] text-white text-sm font-medium rounded-lg hover:bg-[#a84832] disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
                         >
                           Ask
                         </button>

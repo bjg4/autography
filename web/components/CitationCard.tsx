@@ -6,9 +6,10 @@ import { Citation } from '@/lib/api'
 
 interface CitationCardProps {
   citation: Citation
+  compact?: boolean
 }
 
-export default function CitationCard({ citation }: CitationCardProps) {
+export default function CitationCard({ citation, compact = false }: CitationCardProps) {
   const [expanded, setExpanded] = useState(false)
 
   const typeIcons: Record<string, string> = {
@@ -21,6 +22,25 @@ export default function CitationCard({ citation }: CitationCardProps) {
     essay: 'Essay',
     book_chapter: 'Book',
     podcast_transcript: 'Podcast',
+  }
+
+  // Compact mode for sidebar
+  if (compact) {
+    return (
+      <div className="flex items-start gap-2 p-2 rounded-lg hover:bg-[#F5F2ED] transition-colors group">
+        <span className="flex-shrink-0 w-5 h-5 rounded-full bg-[#C45A3B]/10 text-[#C45A3B] flex items-center justify-center text-[10px] font-bold">
+          {citation.index}
+        </span>
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-medium text-[#3D3833] truncate">
+            {citation.title || 'Untitled'}
+          </p>
+          <p className="text-[10px] text-[#9A8C7B] truncate">
+            {typeIcons[citation.source_type] || '📄'} {citation.author}
+          </p>
+        </div>
+      </div>
+    )
   }
 
   return (
