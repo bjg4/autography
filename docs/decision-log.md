@@ -291,4 +291,14 @@ duration: "1:54:40"
 
 ---
 
-*Last updated: 2026-01-19*
+## Pending: Next Re-Index
+
+Tasks to complete during the next corpus re-indexing:
+
+- [ ] **Fix author name**: blake.ist posts show "Blake Green" but should be "Blake Graham" (code fixed in `ingestion/index_corpus.py`, needs re-index to update ChromaDB)
+
+*Bundle with adding new sources to minimize re-indexing overhead.*
+
+---
+
+*Last updated: 2026-01-22*
