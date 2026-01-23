@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, useCallback } from 'react'
+import { usePostHog } from 'posthog-js/react'
 import CitationCard from '@/components/CitationCard'
 import AnswerDisplay from '@/components/AnswerDisplay'
 import { streamChat, getSources, ChatResponse, Citation, SourcesResponse, ConversationTurn } from '@/lib/api'
@@ -132,6 +133,7 @@ function SourceCard({ citation }: { citation: Citation }) {
 }
 
 export default function Home() {
+  const posthog = usePostHog()
   const [question, setQuestion] = useState('')
   const [thread, setThread] = useState<ThreadItem[]>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -281,6 +283,13 @@ export default function Home() {
       }
       setClips(prev => [newClip, ...prev])
       setShowClipButton(false)
+
+      // Track clip event
+      posthog.capture('clip_saved', {
+        text_length: textToClip.length,
+        has_source: !!matchingCitation,
+        source_type: matchingCitation?.source_type,
+      })
       setSelectedText('')
       setJustClipped(textToClip)
       window.getSelection()?.removeAllRanges()
@@ -352,6 +361,13 @@ export default function Home() {
 
   const handleSubmit = async (q: string) => {
     if (!q.trim()) return
+
+    // Track search event
+    posthog.capture('search_submitted', {
+      query: q.trim(),
+      is_followup: thread.length > 0,
+      thread_depth: thread.length,
+    })
 
     shouldScrollRef.current = true
     setIsLoading(true)
