@@ -18,8 +18,10 @@
 
 - Root directory: `web/`
 - Environment variable: `BACKEND_URL=https://autography-production.up.railway.app`
+- **DO NOT set `NEXT_PUBLIC_API_URL`** - it causes CORS errors by bypassing the proxy
 - The frontend proxies API calls through Next.js API routes to the Railway backend
 - Set env var in Vercel Dashboard → Settings → Environment Variables (not in .env files)
+- After changing env vars, push a new commit to trigger fresh build (redeploy from cache won't work for `NEXT_PUBLIC_*` vars)
 
 ### Data Storage
 
