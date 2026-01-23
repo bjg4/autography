@@ -503,7 +503,7 @@ export default function Home() {
                   }}
                   placeholder="Ask anything about product management..."
                   rows={1}
-                  className="w-full px-4 py-3.5 pr-20 text-[15px] bg-white border border-[#E5E0D8] rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-[#C45A3B]/30 focus:border-[#C45A3B] placeholder:text-[#A89F91] resize-none overflow-hidden"
+                  className="w-full px-4 py-3.5 pr-24 text-[15px] bg-white border border-[#E5E0D8] rounded-xl shadow-sm focus:outline-none focus:ring-2 focus:ring-[#C45A3B]/30 focus:border-[#C45A3B] placeholder:text-[#A89F91] resize-none"
                   disabled={isLoading}
                 />
                 <button
@@ -771,7 +771,7 @@ export default function Home() {
                         }}
                         placeholder="Ask a follow-up question..."
                         rows={1}
-                        className="w-full px-4 py-3 pr-20 text-[15px] bg-white border border-[#E5E0D8] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#C45A3B]/30 focus:border-[#C45A3B] placeholder:text-[#A89F91] resize-none overflow-hidden"
+                        className="w-full px-4 py-3 pr-24 text-[15px] bg-white border border-[#E5E0D8] rounded-xl focus:outline-none focus:ring-2 focus:ring-[#C45A3B]/30 focus:border-[#C45A3B] placeholder:text-[#A89F91] resize-none"
                       />
                       <button
                         type="submit"
