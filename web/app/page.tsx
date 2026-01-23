@@ -26,6 +26,52 @@ const sourceTypeConfig: Record<string, { label: string; color: string }> = {
   podcast_transcript: { label: 'Podcast', color: 'bg-purple-50 text-purple-600' },
 }
 
+function SourcesList({ citations, keyPrefix }: { citations: Citation[]; keyPrefix: string }) {
+  const scrollRef = useRef<HTMLDivElement>(null)
+  const [showFade, setShowFade] = useState(true)
+
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+
+    const checkScroll = () => {
+      // Show fade only if not scrolled to bottom
+      const isAtBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 20
+      setShowFade(!isAtBottom && el.scrollHeight > el.clientHeight)
+    }
+
+    checkScroll()
+    el.addEventListener('scroll', checkScroll)
+    // Also check on resize
+    const observer = new ResizeObserver(checkScroll)
+    observer.observe(el)
+
+    return () => {
+      el.removeEventListener('scroll', checkScroll)
+      observer.disconnect()
+    }
+  }, [citations])
+
+  return (
+    <div className="relative flex-1 min-h-0">
+      <div
+        ref={scrollRef}
+        className="h-full overflow-y-auto space-y-2.5 pr-1"
+        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+      >
+        <style jsx>{`div::-webkit-scrollbar { display: none; }`}</style>
+        {citations.map((citation, cidx) => (
+          <SourceCard key={`${keyPrefix}-${cidx}`} citation={citation} />
+        ))}
+      </div>
+      {/* Fade gradient - only show if more content below */}
+      {showFade && (
+        <div className="absolute bottom-0 left-0 right-1 h-12 bg-gradient-to-t from-[#FDFBF7] to-transparent pointer-events-none" />
+      )}
+    </div>
+  )
+}
+
 function SourceCard({ citation }: { citation: Citation }) {
   const [expanded, setExpanded] = useState(false)
   const typeConfig = sourceTypeConfig[citation.source_type] || { label: 'Source', color: 'bg-gray-50 text-gray-600' }
@@ -283,45 +329,22 @@ export default function Home() {
   }
 
   const extractFollowUps = (answer: string): { cleanAnswer: string; followUps: string[] } => {
-    let cleanAnswer = answer
-    let followUpText = ''
-
-    // Try various separators and patterns
-    if (answer.includes('\n---')) {
-      const parts = answer.split('\n---')
-      cleanAnswer = parts[0].trim()
-      followUpText = parts[1] || ''
-    } else if (answer.includes('---')) {
-      const parts = answer.split('---')
-      cleanAnswer = parts[0].trim()
-      followUpText = parts[1] || ''
-    } else {
-      // Match various follow-up patterns including markdown bold
-      const patterns = [
-        /\*\*follow[- ]?up[s]?\s*(threads?\s*to\s*explore|questions?)?[:\s]*\*\*/i,
-        /follow[- ]?up[s]?\s*(threads?\s*to\s*explore|questions?)?[:\s]*/i,
-      ]
-
-      for (const pattern of patterns) {
-        const match = answer.match(pattern)
-        if (match) {
-          const idx = answer.indexOf(match[0])
-          cleanAnswer = answer.slice(0, idx).trim()
-          followUpText = answer.slice(idx + match[0].length)
-          break
-        }
-      }
-    }
-
-    if (!followUpText) {
+    // Look for --- separator
+    const separatorIndex = answer.lastIndexOf('\n---')
+    if (separatorIndex === -1) {
       return { cleanAnswer: answer, followUps: [] }
     }
 
+    const cleanAnswer = answer.slice(0, separatorIndex).trim()
+    const followUpText = answer.slice(separatorIndex + 4) // Skip "\n---"
+
+    // Extract bullet points - each line starting with - is a question
     const questions = followUpText
-      .split(/[?\n]/)
-      .map(q => q.replace(/^[-•\d.)\s\n*]+/, '').trim())
-      .filter(q => q.length > 15 && !q.startsWith('**'))
-      .map(q => q.endsWith('?') ? q : q + '?')
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line.startsWith('-') || line.startsWith('•'))
+      .map(line => line.replace(/^[-•]\s*/, '').trim())
+      .filter(q => q.length > 10 && q.includes('?'))
       .slice(0, 3)
 
     return { cleanAnswer, followUps: questions }
@@ -601,7 +624,7 @@ export default function Home() {
                   </div>
 
                   {/* Answer + Sources row - aligned */}
-                  <div className="flex gap-6 items-start ml-11 mt-3">
+                  <div className="flex gap-6 items-stretch ml-11 mt-3">
                     {/* Answer */}
                     <div className="flex-1 min-w-0">
                       <div className="p-5 bg-white rounded-xl border border-[#E5E0D8]">
@@ -651,25 +674,11 @@ export default function Home() {
                     </div>
 
                     {/* Sources - alongside on lg screens */}
-                    <div className="hidden lg:block w-56 flex-shrink-0">
-                      <div className="sticky top-4">
-                        <h4 className="text-[10px] font-semibold text-[#9A8C7B] uppercase tracking-wider mb-3">
-                          Sources
-                        </h4>
-                        <div className="relative">
-                          <div
-                            className="space-y-2.5 max-h-[calc(100vh-8rem)] overflow-y-auto pr-1"
-                            style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-                          >
-                            <style jsx>{`div::-webkit-scrollbar { display: none; }`}</style>
-                            {item.response.citations.map((citation, cidx) => (
-                              <SourceCard key={`${idx}-${cidx}`} citation={citation} />
-                            ))}
-                          </div>
-                          {/* Fade gradient at bottom */}
-                          <div className="absolute bottom-0 left-0 right-1 h-12 bg-gradient-to-t from-[#FDFBF7] to-transparent pointer-events-none" />
-                        </div>
-                      </div>
+                    <div className="hidden lg:flex lg:flex-col w-56 flex-shrink-0">
+                      <h4 className="text-[10px] font-semibold text-[#9A8C7B] uppercase tracking-wider mb-2">
+                        Sources
+                      </h4>
+                      <SourcesList citations={item.response.citations} keyPrefix={`${idx}`} />
                     </div>
                   </div>
 
@@ -695,7 +704,7 @@ export default function Home() {
                   </div>
 
                   {/* Answer + Sources row - aligned */}
-                  <div className="flex gap-6 items-start ml-11 mt-3">
+                  <div className="flex gap-6 items-stretch ml-11 mt-3">
                     {/* Answer */}
                     <div className="flex-1 min-w-0">
                       <div className="p-5 bg-white rounded-xl border border-[#E5E0D8]">
@@ -722,25 +731,11 @@ export default function Home() {
 
                     {/* Streaming sources - alongside on lg screens */}
                     {streamingCitations.length > 0 && (
-                      <div className="hidden lg:block w-56 flex-shrink-0">
-                        <div className="sticky top-4">
-                          <h4 className="text-[10px] font-semibold text-[#9A8C7B] uppercase tracking-wider mb-3">
-                            Sources
-                          </h4>
-                          <div className="relative">
-                            <div
-                              className="space-y-2.5 max-h-[calc(100vh-8rem)] overflow-y-auto pr-1"
-                              style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
-                            >
-                              <style jsx>{`div::-webkit-scrollbar { display: none; }`}</style>
-                              {streamingCitations.map((citation, cidx) => (
-                                <SourceCard key={`streaming-${cidx}`} citation={citation} />
-                              ))}
-                            </div>
-                            {/* Fade gradient at bottom */}
-                            <div className="absolute bottom-0 left-0 right-1 h-12 bg-gradient-to-t from-[#FDFBF7] to-transparent pointer-events-none" />
-                          </div>
-                        </div>
+                      <div className="hidden lg:flex lg:flex-col w-56 flex-shrink-0">
+                        <h4 className="text-[10px] font-semibold text-[#9A8C7B] uppercase tracking-wider mb-2">
+                          Sources
+                        </h4>
+                        <SourcesList citations={streamingCitations} keyPrefix="streaming" />
                       </div>
                     )}
                   </div>
