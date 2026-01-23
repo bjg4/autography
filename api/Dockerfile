@@ -27,9 +27,8 @@ RUN curl -L https://github.com/bjg4/autography/releases/download/v1.0.0/data.tar
 ENV CHROMA_PATH=/app/chroma_db
 ENV BM25_PATH=/app/bm25_index.pkl
 
-# Railway uses PORT env variable
-ENV PORT=8000
-EXPOSE 8000
+# Railway provides PORT env variable (default 8080)
+EXPOSE 8080
 
-# Run the server
-CMD uvicorn main:app --host 0.0.0.0 --port $PORT
+# Run the server (Railway provides PORT, defaults to 8080)
+CMD uvicorn main:app --host 0.0.0.0 --port ${PORT:-8080}
