@@ -73,7 +73,7 @@ def get_author_from_path(filepath: Path) -> str:
     path_str = str(filepath)
 
     if '/blake-green/' in path_str:
-        return 'Blake Green'
+        return 'Blake Graham'
     elif '/john-cutler/' in path_str:
         return 'John Cutler'
     elif '/lennys/' in path_str:
