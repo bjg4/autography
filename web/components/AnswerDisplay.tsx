@@ -136,20 +136,20 @@ export default function AnswerDisplay({ answer, citations, onCitationClick }: An
   )
 
   const processText = (text: string): React.ReactNode[] => {
-    const parts = text.split(/(\[\d+\])/g)
-    return parts.map((part, i) => {
-      const match = part.match(/^\[(\d+)\]$/)
+    // Match both single [2] and multi [2,3] or [2, 3] citation patterns
+    const parts = text.split(/(\[\d+(?:\s*,\s*\d+)*\])/g)
+    return parts.flatMap((part, i) => {
+      const match = part.match(/^\[(\d+(?:\s*,\s*\d+)*)\]$/)
       if (match) {
-        const citationIndex = parseInt(match[1], 10)
-        const citation = citationMap.get(citationIndex)
-        return (
+        const indices = match[1].split(',').map(s => parseInt(s.trim(), 10))
+        return indices.map((citationIndex, j) => (
           <CitationBadge
-            key={i}
+            key={`${i}-${j}`}
             index={citationIndex}
-            citation={citation}
+            citation={citationMap.get(citationIndex)}
             onClick={() => onCitationClick?.(citationIndex)}
           />
-        )
+        ))
       }
       return <span key={i}>{part}</span>
     })
