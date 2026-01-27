@@ -66,17 +66,17 @@ Your sources include Marty Cagan, Teresa Torres, John Cutler, Ryan Singer, and o
 
 class ConversationTurn(BaseModel):
     """A single turn in the conversation."""
-    question: str
-    answer: str
+    question: str = Field(..., max_length=10000)
+    answer: str = Field(..., max_length=50000)
 
 
 class ChatRequest(BaseModel):
     """Chat request body."""
-    question: str = Field(..., min_length=1, description="User's question")
+    question: str = Field(..., min_length=1, max_length=10000, description="User's question")
     n_sources: int = Field(default=8, ge=1, le=20, description="Number of sources to retrieve")
     source_types: Optional[list[str]] = Field(default=None, description="Filter by source types")
     authors: Optional[list[str]] = Field(default=None, description="Filter by authors")
-    history: Optional[list[ConversationTurn]] = Field(default=None, description="Previous conversation turns for context")
+    history: Optional[list[ConversationTurn]] = Field(default=None, max_length=10, description="Previous conversation turns for context")
 
 
 class Citation(BaseModel):
@@ -237,7 +237,7 @@ Here's what I found in the knowledge base:
     # Default follow-ups if none extracted
     if not follow_ups:
         follow_ups = [
-            f"What else do these sources say about {chat_request.question.split()[0:3]}?",
+            f"What else do these sources say about {' '.join(chat_request.question.split()[:3])}?",
             "Are there any contrasting viewpoints on this topic?",
             "How do I apply this in practice?"
         ]

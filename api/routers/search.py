@@ -116,6 +116,8 @@ class HybridSearch:
             self.doc_metadatas = cache['doc_metadatas']
             # Build O(1) lookup dict for document retrieval
             self.doc_id_to_idx = {doc_id: idx for idx, doc_id in enumerate(self.doc_ids)}
+            # Cache sources (computed once, not on every request)
+            self._sources_cache = self._compute_sources()
 
         print(f"Loaded BM25 index ({len(self.doc_ids)} docs)")
 
@@ -244,8 +246,8 @@ class HybridSearch:
 
         return results
 
-    def get_sources(self) -> dict:
-        """Get available source types and authors."""
+    def _compute_sources(self) -> dict:
+        """Compute available source types and authors (called once at init)."""
         source_types = set()
         authors = set()
 
@@ -262,6 +264,10 @@ class HybridSearch:
                 'total_documents': len(self.doc_ids)
             }
         }
+
+    def get_sources(self) -> dict:
+        """Get available source types and authors (O(1) from cache)."""
+        return self._sources_cache
 
 
 def init_search_engine(chroma_path: str, bm25_path: str):
