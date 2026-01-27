@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import { PostHogProvider } from '@/components/PostHogProvider'
+import { PasswordGate } from '@/components/PasswordGate'
 
 export const viewport: Viewport = {
   width: 'device-width',
@@ -21,7 +22,9 @@ export default function RootLayout({
     <html lang="en">
       <body className="bg-gray-50 text-gray-900 antialiased">
         <PostHogProvider>
-          {children}
+          <PasswordGate>
+            {children}
+          </PasswordGate>
         </PostHogProvider>
       </body>
     </html>
