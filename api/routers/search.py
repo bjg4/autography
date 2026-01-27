@@ -5,6 +5,7 @@ Provides endpoints for hybrid search with filters.
 """
 
 import hashlib
+import heapq
 import json
 import pickle
 from pathlib import Path
@@ -139,14 +140,13 @@ class HybridSearch:
         return scored
 
     def _bm25_search(self, query: str, n: int) -> list[tuple[str, float]]:
-        """Perform BM25 keyword search."""
+        """Perform BM25 keyword search. Uses heapq for O(n + k log k) top-k."""
         tokenized_query = query.lower().split()
         scores = self.bm25.get_scores(tokenized_query)
 
-        scored_docs = [(self.doc_ids[i], scores[i]) for i in range(len(scores))]
-        scored_docs.sort(key=lambda x: x[1], reverse=True)
-
-        return scored_docs[:n]
+        # O(n + k log k) instead of O(n log n) full sort
+        top_indices = heapq.nlargest(n, range(len(scores)), key=lambda i: scores[i])
+        return [(self.doc_ids[i], scores[i]) for i in top_indices]
 
     def _reciprocal_rank_fusion(
         self,

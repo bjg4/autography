@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { usePostHog } from 'posthog-js/react'
 import CitationCard from '@/components/CitationCard'
 import AnswerDisplay from '@/components/AnswerDisplay'
@@ -160,8 +160,9 @@ export default function Home() {
   const [justClipped, setJustClipped] = useState<string | null>(null)
   const [drawerExpanded, setDrawerExpanded] = useState(false)
 
-  // Track seen citations for O(1) deduplication
-  const seenCitationsRef = useRef<Set<string>>(new Set())
+  // Streaming performance: batch token updates to ~60/sec via rAF
+  const tokenBufferRef = useRef('')
+  const rafRef = useRef<number | undefined>(undefined)
 
   // Load clips from localStorage
   useEffect(() => {
@@ -189,30 +190,23 @@ export default function Home() {
       .catch((err) => console.error('Failed to load sources:', err))
   }, [])
 
-  // IntersectionObserver to track which response is visible
+  // IntersectionObserver to track which response is visible (single observer for all elements)
   useEffect(() => {
-    const observers: IntersectionObserver[] = []
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting && entry.intersectionRatio > 0.3) {
+            const index = responseRefs.current.indexOf(entry.target as HTMLDivElement)
+            if (index !== -1) setVisibleResponseIndex(index)
+          }
+        })
+      },
+      { threshold: [0.3, 0.5, 0.7], rootMargin: '-100px 0px -100px 0px' }
+    )
 
-    responseRefs.current.forEach((ref, index) => {
-      if (ref) {
-        const observer = new IntersectionObserver(
-          (entries) => {
-            entries.forEach((entry) => {
-              if (entry.isIntersecting && entry.intersectionRatio > 0.3) {
-                setVisibleResponseIndex(index)
-              }
-            })
-          },
-          { threshold: [0.3, 0.5, 0.7], rootMargin: '-100px 0px -100px 0px' }
-        )
-        observer.observe(ref)
-        observers.push(observer)
-      }
-    })
+    responseRefs.current.forEach((ref) => ref && observer.observe(ref))
 
-    return () => {
-      observers.forEach(observer => observer.disconnect())
-    }
+    return () => observer.disconnect()
   }, [thread.length])
 
   // Scroll when user submits new question
@@ -331,7 +325,7 @@ export default function Home() {
   }
 
   const getHistory = (): ConversationTurn[] => {
-    return thread.map(item => ({
+    return thread.slice(-3).map(item => ({
       question: item.question,
       answer: item.response.answer
     }))
@@ -376,6 +370,7 @@ export default function Home() {
     setStreamingCitations([])
     setCurrentQuestion(q.trim())
     setQuestion('')
+    tokenBufferRef.current = ''
 
     let finalAnswer = ''
     let finalCitations: Citation[] = []
@@ -390,9 +385,28 @@ export default function Home() {
         },
         onToken: (token) => {
           finalAnswer += token
-          setStreamingAnswer(prev => prev + token)
+          tokenBufferRef.current += token
+
+          // Batch state updates to ~60/sec via requestAnimationFrame
+          if (!rafRef.current) {
+            rafRef.current = requestAnimationFrame(() => {
+              setStreamingAnswer(prev => prev + tokenBufferRef.current)
+              tokenBufferRef.current = ''
+              rafRef.current = undefined
+            })
+          }
         },
         onDone: () => {
+          // Flush any remaining buffered tokens
+          if (rafRef.current) {
+            cancelAnimationFrame(rafRef.current)
+            rafRef.current = undefined
+          }
+          if (tokenBufferRef.current) {
+            setStreamingAnswer(prev => prev + tokenBufferRef.current)
+            tokenBufferRef.current = ''
+          }
+
           const { cleanAnswer, followUps } = extractFollowUps(finalAnswer)
 
           setThread(prev => [...prev, {
@@ -428,7 +442,6 @@ export default function Home() {
   const startNewThread = () => {
     setThread([])
     setStreamingCitations([])
-    seenCitationsRef.current.clear()
     setQuestion('')
     setError(null)
     setVisibleResponseIndex(-1)

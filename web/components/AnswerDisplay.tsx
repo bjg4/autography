@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import ReactMarkdown from 'react-markdown'
 import { Citation } from '@/lib/api'
@@ -130,7 +130,10 @@ function CitationBadge({
 }
 
 export default function AnswerDisplay({ answer, citations, onCitationClick }: AnswerDisplayProps) {
-  const citationMap = new Map(citations.map(c => [c.index, c]))
+  const citationMap = useMemo(
+    () => new Map(citations.map(c => [c.index, c])),
+    [citations]
+  )
 
   const processText = (text: string): React.ReactNode[] => {
     const parts = text.split(/(\[\d+\])/g)
@@ -164,16 +167,16 @@ export default function AnswerDisplay({ answer, citations, onCitationClick }: An
     return children
   }
 
+  const markdownComponents = useMemo(() => ({
+    p: ({ children }: { children?: React.ReactNode }) => <p>{processChildren(children)}</p>,
+    li: ({ children }: { children?: React.ReactNode }) => <li>{processChildren(children)}</li>,
+    strong: ({ children }: { children?: React.ReactNode }) => <strong>{processChildren(children)}</strong>,
+    em: ({ children }: { children?: React.ReactNode }) => <em>{processChildren(children)}</em>,
+  }), [citationMap])
+
   return (
     <div className="prose prose-stone prose-headings:text-[#3D3833] prose-headings:font-semibold prose-h2:text-xl prose-h2:mt-6 prose-h2:mb-3 prose-h3:text-lg prose-p:my-3 prose-ul:my-3 prose-li:my-1 max-w-none">
-      <ReactMarkdown
-        components={{
-          p: ({ children }) => <p>{processChildren(children)}</p>,
-          li: ({ children }) => <li>{processChildren(children)}</li>,
-          strong: ({ children }) => <strong>{processChildren(children)}</strong>,
-          em: ({ children }) => <em>{processChildren(children)}</em>,
-        }}
-      >
+      <ReactMarkdown components={markdownComponents}>
         {answer}
       </ReactMarkdown>
     </div>
