@@ -747,14 +747,10 @@ export default function Home() {
                     <div className="flex-1 min-w-0">
                       <div className="p-5 bg-white rounded-xl border border-[#E5E0D8]">
                         {streamingAnswer ? (
-                          <>
-                            <AnswerDisplay
-                              answer={streamingAnswer}
-                              citations={streamingCitations}
-                              onCitationClick={() => {}}
-                            />
-                            <span className="inline-block w-2 h-4 bg-[#C45A3B] animate-pulse ml-0.5" />
-                          </>
+                          <div className="prose prose-stone prose-headings:text-[#3D3833] prose-headings:font-semibold prose-p:my-3 max-w-none whitespace-pre-wrap text-[#3D3833]">
+                            {streamingAnswer}
+                            <span className="inline-block w-2 h-4 bg-[#C45A3B] animate-pulse ml-0.5 align-middle" />
+                          </div>
                         ) : (
                           <div className="flex items-center gap-2 text-[#7D756A]">
                             <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
