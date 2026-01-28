@@ -49,3 +49,9 @@ Thumbs.db
 .env.local
 .env.production
 *.pem
+
+# Large data files (downloaded from GitHub Release during Railway deploy)
+# Temporarily ignored to avoid 260MB re-upload on every push
+chroma_db/
+bm25_index.pkl
+data.tar.gz

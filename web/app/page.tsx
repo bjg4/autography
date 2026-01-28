@@ -160,10 +160,6 @@ export default function Home() {
   const [justClipped, setJustClipped] = useState<string | null>(null)
   const [drawerExpanded, setDrawerExpanded] = useState(false)
 
-  // Streaming performance: batch token updates to ~60/sec via rAF
-  const tokenBufferRef = useRef('')
-  const rafRef = useRef<number | undefined>(undefined)
-
   // Load clips from localStorage
   useEffect(() => {
     const savedClips = localStorage.getItem('autography-clips')
@@ -370,7 +366,6 @@ export default function Home() {
     setStreamingCitations([])
     setCurrentQuestion(q.trim())
     setQuestion('')
-    tokenBufferRef.current = ''
 
     let finalAnswer = ''
     let finalCitations: Citation[] = []
@@ -385,28 +380,10 @@ export default function Home() {
         },
         onToken: (token) => {
           finalAnswer += token
-          tokenBufferRef.current += token
-
-          // Batch state updates to ~60/sec via requestAnimationFrame
-          if (!rafRef.current) {
-            rafRef.current = requestAnimationFrame(() => {
-              setStreamingAnswer(prev => prev + tokenBufferRef.current)
-              tokenBufferRef.current = ''
-              rafRef.current = undefined
-            })
-          }
+          // Direct state update - plain text is cheap to render
+          setStreamingAnswer(prev => prev + token)
         },
         onDone: () => {
-          // Flush any remaining buffered tokens
-          if (rafRef.current) {
-            cancelAnimationFrame(rafRef.current)
-            rafRef.current = undefined
-          }
-          if (tokenBufferRef.current) {
-            setStreamingAnswer(prev => prev + tokenBufferRef.current)
-            tokenBufferRef.current = ''
-          }
-
           const { cleanAnswer, followUps } = extractFollowUps(finalAnswer)
 
           setThread(prev => [...prev, {
