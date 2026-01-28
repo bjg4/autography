@@ -282,6 +282,87 @@ duration: "1:54:40"
 
 ---
 
+## Decision 009: Plain Text Streaming Display
+
+**Date:** 2026-01-28
+**Status:** Approved
+**Context:** Streaming responses through ReactMarkdown + citation regex processing produced garbled output mid-stream (partial bold markers `**`, broken citation brackets `[4`, truncated words).
+
+### Decision
+
+Render **plain text** during streaming; apply markdown formatting + citation badges only after stream completes.
+
+### Implementation
+
+```tsx
+// During streaming: plain text with whitespace preservation
+{streamingAnswer ? (
+  <div className="whitespace-pre-wrap text-[#3D3833]">
+    {streamingAnswer}
+    <span className="animate-pulse">▊</span>
+  </div>
+) : (
+  <LoadingSpinner />
+)}
+
+// After streaming: full AnswerDisplay with ReactMarkdown + citations
+<AnswerDisplay answer={answer} citations={citations} />
+```
+
+### Rationale
+
+1. **ReactMarkdown on partial input fails**: Incomplete `**bold**` or `[citation]` markers get mangled
+2. **Plain text is readable**: Raw markdown syntax (`**`, `[3]`) is acceptable during fast streaming
+3. **Clean transition**: Once complete, the polished markdown render replaces the plain text
+4. **Simpler code**: No need for streaming-aware markdown parser
+
+### Also Removed: rAF Token Batching
+
+Previously batched token updates via `requestAnimationFrame` to reduce renders from ~2500 to ~60/sec. This caused text to appear in "jumps" rather than smoothly character-by-character.
+
+**Removed because:** Plain text rendering is cheap enough to update on every token. Direct state updates (`setStreamingAnswer(prev => prev + token)`) now give smooth character-by-character display.
+
+---
+
+## Decision 010: Git-Ignore LFS Data Files
+
+**Date:** 2026-01-28
+**Status:** Approved
+**Context:** Every `git push` was re-uploading 260MB of LFS files (`chroma_db/chroma.sqlite3`, `bm25_index.pkl`, `data.tar.gz`) even when unchanged.
+
+### Decision
+
+Add LFS data files to `.gitignore`. They're downloaded from GitHub Release during Railway deployment anyway.
+
+### Root Cause
+
+SQLite databases get modified on read operations (WAL checkpointing, page counts). Opening `chroma.sqlite3` locally marks it as "changed" even without writes, triggering full LFS re-upload.
+
+### Implementation
+
+```gitignore
+# Large data files (downloaded from GitHub Release during Railway deploy)
+chroma_db/
+bm25_index.pkl
+data.tar.gz
+```
+
+### Rationale
+
+1. **Railway Dockerfile already downloads from Release**: `curl -L https://github.com/bjg4/autography/releases/download/v1.0.0/data.tar.gz`
+2. **No deployment impact**: Files aren't used from git, only from Release
+3. **Faster pushes**: Avoid 260MB upload on every commit
+4. **Still versioned**: Data changes go to GitHub Releases, not git history
+
+### When to Update Data
+
+1. Re-index corpus locally → generates new `chroma_db/` and `bm25_index.pkl`
+2. Create `data.tar.gz`: `tar -czvf data.tar.gz chroma_db/ bm25_index.pkl`
+3. Create new GitHub Release (e.g., `v1.1.0`) with `data.tar.gz` attached
+4. Update `api/Dockerfile` to reference new release tag
+
+---
+
 ## Future Decisions (Not Yet Made)
 
 - [ ] Reranking: Add Cohere or cross-encoder reranker?
@@ -301,4 +382,4 @@ Tasks to complete during the next corpus re-indexing:
 
 ---
 
-*Last updated: 2026-01-22*
+*Last updated: 2026-01-28*
