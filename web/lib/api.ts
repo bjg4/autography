@@ -73,6 +73,17 @@ export async function getSources(): Promise<SourcesResponse> {
   return res.json()
 }
 
+export async function getSuggestions(): Promise<string[]> {
+  const res = await fetch(`${API_URL}/api/suggestions`)
+
+  if (!res.ok) {
+    throw new Error(`Failed to get suggestions: ${res.statusText}`)
+  }
+
+  const data = await res.json()
+  return data.suggestions
+}
+
 export interface StreamCallbacks {
   onCitations: (citations: Citation[]) => void
   onToken: (token: string) => void

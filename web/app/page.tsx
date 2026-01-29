@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { usePostHog } from 'posthog-js/react'
 import CitationCard from '@/components/CitationCard'
 import AnswerDisplay from '@/components/AnswerDisplay'
-import { streamChat, getSources, ChatResponse, Citation, SourcesResponse, ConversationTurn } from '@/lib/api'
+import { streamChat, getSources, getSuggestions, ChatResponse, Citation, SourcesResponse, ConversationTurn } from '@/lib/api'
 
 interface ThreadItem {
   question: string
@@ -26,6 +26,12 @@ const sourceTypeConfig: Record<string, { label: string; color: string }> = {
   book_chapter: { label: 'Book', color: 'bg-amber-50 text-amber-600' },
   podcast_transcript: { label: 'Podcast', color: 'bg-purple-50 text-purple-600' },
 }
+
+const DEFAULT_SUGGESTIONS = [
+  'What makes a great product team?',
+  'How do I avoid building features nobody wants?',
+  'What is continuous discovery?',
+]
 
 function SourcesList({ citations, keyPrefix }: { citations: Citation[]; keyPrefix: string }) {
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -150,6 +156,9 @@ export default function Home() {
   const [visibleResponseIndex, setVisibleResponseIndex] = useState<number>(-1)
   const responseRefs = useRef<(HTMLDivElement | null)[]>([])
 
+  // Suggestions state (null = loading, array = loaded)
+  const [suggestions, setSuggestions] = useState<string[] | null>(null)
+
   // Clips state
   const [clips, setClips] = useState<Clip[]>([])
   const [clipsLoaded, setClipsLoaded] = useState(false)
@@ -184,6 +193,13 @@ export default function Home() {
     getSources()
       .then(setSources)
       .catch((err) => console.error('Failed to load sources:', err))
+
+    getSuggestions()
+      .then(setSuggestions)
+      .catch((err) => {
+        console.error('Failed to load suggestions:', err)
+        setSuggestions(DEFAULT_SUGGESTIONS)
+      })
   }, [])
 
   // IntersectionObserver to track which response is visible (single observer for all elements)
@@ -550,19 +566,28 @@ export default function Home() {
             <div className="text-center py-12">
               <p className="text-[#7D756A] mb-6">Try asking about:</p>
               <div className="flex flex-wrap justify-center gap-2">
-                {[
-                  'What makes a great product team?',
-                  'How do I avoid building features nobody wants?',
-                  'What is continuous discovery?',
-                ].map((suggestion) => (
-                  <button
-                    key={suggestion}
-                    onClick={() => handleSubmit(suggestion)}
-                    className="px-4 py-2.5 bg-white border border-[#E5E0D8] rounded-lg text-sm text-[#5D574E] hover:border-[#C45A3B] hover:text-[#C45A3B] transition-colors"
-                  >
-                    {suggestion}
-                  </button>
-                ))}
+                {suggestions === null ? (
+                  // Loading skeleton
+                  <>
+                    {[1, 2, 3].map((i) => (
+                      <div
+                        key={i}
+                        className="h-10 bg-[#F5F2ED] border border-[#E5E0D8] rounded-lg animate-pulse"
+                        style={{ width: `${120 + i * 40}px` }}
+                      />
+                    ))}
+                  </>
+                ) : (
+                  suggestions.map((suggestion) => (
+                    <button
+                      key={suggestion}
+                      onClick={() => handleSubmit(suggestion)}
+                      className="px-4 py-2.5 bg-white border border-[#E5E0D8] rounded-lg text-sm text-[#5D574E] hover:border-[#C45A3B] hover:text-[#C45A3B] transition-colors"
+                    >
+                      {suggestion}
+                    </button>
+                  ))
+                )}
               </div>
             </div>
 

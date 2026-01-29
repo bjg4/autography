@@ -4,7 +4,9 @@ Chat router for RAG-powered Q&A with citations.
 This is the core Autography experience - synthesized answers with evidence.
 """
 
+import json
 import os
+from datetime import datetime, timedelta
 from typing import Optional
 
 import anthropic
@@ -16,6 +18,10 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 
 from routers.search import get_search_engine
+
+# Cache for suggestions (refreshed hourly)
+_suggestions_cache: dict = {"data": None, "expires": None}
+SUGGESTIONS_CACHE_TTL = timedelta(hours=1)
 
 router = APIRouter(prefix="/api", tags=["chat"])
 
@@ -94,6 +100,11 @@ class ChatResponse(BaseModel):
     answer: str
     citations: list[Citation]
     follow_ups: list[str]
+
+
+class SuggestionsResponse(BaseModel):
+    """Dynamic question suggestions."""
+    suggestions: list[str] = Field(..., description="List of suggested questions")
 
 
 def format_sources_for_context(results: list[dict]) -> tuple[str, list[Citation]]:
@@ -247,6 +258,57 @@ Here's what I found in the knowledge base:
         citations=citations,
         follow_ups=follow_ups
     )
+
+
+@router.get("/suggestions", response_model=SuggestionsResponse)
+@limiter.limit("30/minute")
+async def get_suggestions(request: Request):
+    """Generate dynamic question suggestions using Haiku 4.5 (cached for 1 hour)."""
+    global _suggestions_cache
+    now = datetime.utcnow()
+
+    # Return cached suggestions if still valid
+    if _suggestions_cache["data"] and _suggestions_cache["expires"] and now < _suggestions_cache["expires"]:
+        return {"suggestions": _suggestions_cache["data"]}
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        raise HTTPException(
+            status_code=503,
+            detail="ANTHROPIC_API_KEY not configured"
+        )
+
+    try:
+        response = await client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=150,
+            system="Generate 3 short, interesting questions about product management that someone might ask. Make them specific and varied - cover different PM topics like discovery, teams, prioritization, stakeholders, metrics, or strategy. Return ONLY a JSON array of 3 strings, nothing else. Example: [\"How do I...\", \"What makes...\", \"When should...\"]",
+            messages=[{"role": "user", "content": "Generate 3 diverse PM questions"}]
+        )
+        suggestions = json.loads(response.content[0].text)
+
+        # Cache the suggestions
+        _suggestions_cache["data"] = suggestions
+        _suggestions_cache["expires"] = now + SUGGESTIONS_CACHE_TTL
+
+        return {"suggestions": suggestions}
+    except json.JSONDecodeError:
+        # Fallback if response isn't valid JSON
+        return {"suggestions": [
+            "What makes a great product team?",
+            "How do I avoid building features nobody wants?",
+            "What is continuous discovery?"
+        ]}
+    except anthropic.RateLimitError:
+        raise HTTPException(
+            status_code=429,
+            detail="Rate limit exceeded. Please wait and try again."
+        )
+    except anthropic.APIError:
+        raise HTTPException(
+            status_code=502,
+            detail="AI service temporarily unavailable"
+        )
 
 
 @router.post("/chat/stream")
