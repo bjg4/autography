@@ -5,7 +5,7 @@ import { usePostHog } from 'posthog-js/react'
 import CitationCard from '@/components/CitationCard'
 import AnswerDisplay from '@/components/AnswerDisplay'
 import { streamChat, getSources, getSuggestions, ChatResponse, Citation, SourcesResponse, ConversationTurn } from '@/lib/api'
-import { UserAvatar } from '@/components/BrandIcon'
+// Removed UserAvatar - this is a search interface, not a chat
 
 interface ThreadItem {
   question: string
@@ -658,18 +658,17 @@ export default function Home() {
                   key={idx}
                   ref={el => { responseRefs.current[idx] = el }}
                 >
-                  {/* Question + Sources row - aligned with response */}
+                  {/* Question - editorial style, no chat avatar */}
                   <div className="flex gap-6 items-start">
-                    <div className="flex items-start gap-3 flex-1 min-w-0">
-                      <UserAvatar />
-                      <p className="text-[#2D2A26] font-medium pt-1">{item.question}</p>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-lg font-serif italic text-[#2D2A26] leading-snug">{item.question}</p>
                     </div>
                     {/* Spacer for sources column alignment */}
                     <div className="hidden lg:block w-56 flex-shrink-0" />
                   </div>
 
-                  {/* Answer + Sources row - aligned */}
-                  <div className="flex gap-6 items-stretch ml-11 mt-3">
+                  {/* Answer + Sources row */}
+                  <div className="flex gap-6 items-stretch mt-4">
                     {/* Answer */}
                     <div className="flex-1 min-w-0">
                       <div className="p-5 bg-white rounded-xl border border-[#E5E0D8]">
@@ -736,18 +735,17 @@ export default function Home() {
               {/* Streaming response */}
               {isLoading && currentQuestion && (
                 <div>
-                  {/* Question + Sources row - aligned with response */}
+                  {/* Question - editorial style, no chat avatar */}
                   <div className="flex gap-6 items-start">
-                    <div className="flex items-start gap-3 flex-1 min-w-0">
-                      <UserAvatar />
-                      <p className="text-[#2D2A26] font-medium pt-1">{currentQuestion}</p>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-lg font-serif italic text-[#2D2A26] leading-snug">{currentQuestion}</p>
                     </div>
                     {/* Spacer for sources column alignment */}
                     <div className="hidden lg:block w-56 flex-shrink-0" />
                   </div>
 
-                  {/* Answer + Sources row - aligned */}
-                  <div className="flex gap-6 items-stretch ml-11 mt-3">
+                  {/* Answer + Sources row */}
+                  <div className="flex gap-6 items-stretch mt-4">
                     {/* Answer */}
                     <div className="flex-1 min-w-0">
                       <div className="p-5 bg-white rounded-xl border border-[#E5E0D8]">
@@ -789,7 +787,7 @@ export default function Home() {
 
               {/* Follow-up input */}
               {!isLoading && thread.length > 0 && (
-                <div className="pl-0 md:pl-11 pt-2">
+                <div className="pt-4">
                   <form onSubmit={handleFormSubmit}>
                     <div className="relative lg:mr-[15.5rem]">
                       <textarea
