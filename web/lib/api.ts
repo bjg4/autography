@@ -85,6 +85,7 @@ export async function getSuggestions(): Promise<string[]> {
 }
 
 export interface StreamCallbacks {
+  onSourceCount?: (count: number) => void
   onCitations: (citations: Citation[]) => void
   onToken: (token: string) => void
   onDone: () => void
@@ -150,7 +151,9 @@ export async function streamChat(
             if (line.startsWith('data: ')) {
               try {
                 const data = JSON.parse(line.slice(6))
-                if (data.type === 'citations') {
+                if (data.type === 'source_count') {
+                  callbacks.onSourceCount?.(data.count)
+                } else if (data.type === 'citations') {
                   callbacks.onCitations(data.data)
                 } else if (data.type === 'token') {
                   callbacks.onToken(data.data)

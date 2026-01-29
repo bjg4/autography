@@ -151,6 +151,7 @@ export default function Home() {
   const [streamingAnswer, setStreamingAnswer] = useState('')
   const [streamingCitations, setStreamingCitations] = useState<Citation[]>([])
   const [currentQuestion, setCurrentQuestion] = useState('')
+  const [sourceCount, setSourceCount] = useState<number | null>(null)
 
   // Track which response is currently visible (for sidebar)
   const [visibleResponseIndex, setVisibleResponseIndex] = useState<number>(-1)
@@ -390,6 +391,9 @@ export default function Home() {
       q.trim(),
       { history: getHistory() },
       {
+        onSourceCount: (count) => {
+          setSourceCount(count)
+        },
         onCitations: (citations) => {
           finalCitations = citations
           setStreamingCitations(citations)
@@ -412,6 +416,7 @@ export default function Home() {
           }])
           setStreamingAnswer('')
           setCurrentQuestion('')
+          setSourceCount(null)
           setIsLoading(false)
           // Set visible to the new response
           setVisibleResponseIndex(thread.length)
@@ -421,6 +426,7 @@ export default function Home() {
           setStreamingAnswer('')
           setStreamingCitations([])
           setCurrentQuestion('')
+          setSourceCount(null)
           setIsLoading(false)
         }
       }
@@ -759,7 +765,13 @@ export default function Home() {
                               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                             </svg>
-                            <span className="text-sm">Searching knowledge base...</span>
+                            <span className="text-sm">
+                              {sourceCount !== null
+                                ? sourceCount > 0
+                                  ? `Found ${sourceCount} sources, synthesizing...`
+                                  : 'No sources found...'
+                                : 'Searching knowledge base...'}
+                            </span>
                           </div>
                         )}
                       </div>

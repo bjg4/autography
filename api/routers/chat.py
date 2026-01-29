@@ -341,46 +341,52 @@ async def chat_stream(chat_request: ChatRequest, request: Request):
         )
 
     engine = get_search_engine()
-    results = await engine.search_async(
-        query=chat_request.question,
-        n_results=chat_request.n_sources,
-        source_types=chat_request.source_types,
-        authors=chat_request.authors,
-        mode="hybrid"
-    )
 
-    context, citations = format_sources_for_context(results)
-
-    # Build messages with conversation history (same as non-streaming endpoint)
+    # Build conversation history (but don't search yet - that happens inside generate)
     messages = []
-
-    # Add previous conversation turns if present (limit to last 3 for token efficiency)
     if chat_request.history:
         recent_history = chat_request.history[-3:]
         for turn in recent_history:
             messages.append({"role": "user", "content": turn.question})
             messages.append({"role": "assistant", "content": turn.answer})
 
-    # Add current question with retrieved context
-    user_message = f"""{chat_request.question}
+    async def generate():
+        # Search INSIDE generator so frontend sees "Searching..." before results arrive
+        try:
+            results = await engine.search_async(
+                query=chat_request.question,
+                n_results=chat_request.n_sources,
+                source_types=chat_request.source_types,
+                authors=chat_request.authors,
+                mode="hybrid"
+            )
+        except Exception as e:
+            print(f"[Chat Stream] Search failed: {e}")
+            yield f"data: {json.dumps({'type': 'error', 'message': 'Search failed. Please try again.'})}\n\n"
+            return
+
+        # Send source count (so frontend can update loading message)
+        yield f"data: {json.dumps({'type': 'source_count', 'count': len(results)})}\n\n"
+
+        context, citations = format_sources_for_context(results)
+
+        # Send citations
+        yield f"data: {json.dumps({'type': 'citations', 'data': [c.model_dump() for c in citations]})}\n\n"
+
+        # Build user message with context
+        user_message = f"""{chat_request.question}
 
 Here's what I found in the knowledge base:
 
 {context}"""
-    messages.append({"role": "user", "content": user_message})
+        full_messages = messages + [{"role": "user", "content": user_message}]
 
-    async def generate():
-        import json
-
-        # First, send citations
-        yield f"data: {json.dumps({'type': 'citations', 'data': [c.model_dump() for c in citations]})}\n\n"
-
-        # Then stream the answer (async - doesn't block event loop)
+        # Stream the answer
         async with client.messages.stream(
             model="claude-sonnet-4-5-20250929",
             max_tokens=1500,
             system=SYSTEM_PROMPT,
-            messages=messages
+            messages=full_messages
         ) as stream:
             async for text in stream.text_stream:
                 yield f"data: {json.dumps({'type': 'token', 'data': text})}\n\n"
