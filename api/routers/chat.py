@@ -165,9 +165,9 @@ async def chat(chat_request: ChatRequest, request: Request):
             detail="ANTHROPIC_API_KEY not configured. Set it in your environment."
         )
 
-    # 1. Retrieve relevant sources
+    # 1. Retrieve relevant sources (parallel semantic + BM25)
     engine = get_search_engine()
-    results = engine.search(
+    results = await engine.search_async(
         query=chat_request.question,
         n_results=chat_request.n_sources,
         source_types=chat_request.source_types,
@@ -261,7 +261,7 @@ async def chat_stream(chat_request: ChatRequest, request: Request):
         )
 
     engine = get_search_engine()
-    results = engine.search(
+    results = await engine.search_async(
         query=chat_request.question,
         n_results=chat_request.n_sources,
         source_types=chat_request.source_types,

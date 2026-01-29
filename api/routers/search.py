@@ -4,6 +4,7 @@ Search router for the Autography API.
 Provides endpoints for hybrid search with filters.
 """
 
+import asyncio
 import hashlib
 import heapq
 import json
@@ -194,30 +195,75 @@ class HybridSearch:
             bm25_results = self._bm25_search(query, n_candidates)
             ranked = self._reciprocal_rank_fusion(semantic_results, bm25_results)
 
+        return self._apply_filters_and_diversity(
+            ranked, n_results, source_type, source_types, author, authors, diversify
+        )
+
+    async def search_async(
+        self,
+        query: str,
+        n_results: int = 10,
+        source_type: Optional[str] = None,
+        source_types: Optional[list[str]] = None,
+        author: Optional[str] = None,
+        authors: Optional[list[str]] = None,
+        mode: str = "hybrid",
+        diversify: bool = True
+    ) -> list[dict]:
+        """
+        Async search with parallel semantic + BM25 execution.
+
+        Runs semantic and BM25 searches concurrently using asyncio.to_thread,
+        then applies the same filtering and diversity logic as search().
+        """
+        n_candidates = n_results * 5
+
+        if mode == "semantic":
+            ranked = await asyncio.to_thread(self._semantic_search, query, n_candidates)
+        elif mode == "bm25":
+            ranked = await asyncio.to_thread(self._bm25_search, query, n_candidates)
+        else:
+            # Parallel execution - both methods only read from self, thread-safe
+            semantic_results, bm25_results = await asyncio.gather(
+                asyncio.to_thread(self._semantic_search, query, n_candidates),
+                asyncio.to_thread(self._bm25_search, query, n_candidates),
+            )
+            ranked = self._reciprocal_rank_fusion(semantic_results, bm25_results)
+
+        return self._apply_filters_and_diversity(
+            ranked, n_results, source_type, source_types, author, authors, diversify
+        )
+
+    def _apply_filters_and_diversity(
+        self,
+        ranked: list[tuple[str, float]],
+        n_results: int,
+        source_type: Optional[str],
+        source_types: Optional[list[str]],
+        author: Optional[str],
+        authors: Optional[list[str]],
+        diversify: bool
+    ) -> list[dict]:
+        """Apply filtering and diversity constraints to ranked results."""
         results = []
-        seen_authors = {}  # Track how many results per author
-        seen_sources = {}  # Track how many results per source title
+        seen_authors = {}
+        seen_sources = {}
 
         for doc_id, score in ranked:
-            idx = self.doc_id_to_idx[doc_id]  # O(1) lookup instead of O(n)
+            idx = self.doc_id_to_idx[doc_id]
             metadata = self.doc_metadatas[idx]
 
-            # Single source_type filter (backwards compat)
             if source_type and metadata.get('source_type') != source_type:
                 continue
-            # Multiple source_types filter
             if source_types and metadata.get('source_type') not in source_types:
                 continue
-            # Single author filter (backwards compat)
             if author and author.lower() not in metadata.get('author', '').lower():
                 continue
-            # Multiple authors filter
             if authors:
                 doc_author = metadata.get('author', '').lower()
                 if not any(a.lower() in doc_author for a in authors):
                     continue
 
-            # Diversity: limit results per author/source
             if diversify:
                 doc_author = metadata.get('author', 'Unknown')
                 doc_source = metadata.get('title', '') or metadata.get('book_title', '')
@@ -225,7 +271,6 @@ class HybridSearch:
                 author_count = seen_authors.get(doc_author, 0)
                 source_count = seen_sources.get(doc_source, 0)
 
-                # Allow max 3 from same author, max 2 from same source
                 if author_count >= 3:
                     continue
                 if source_count >= 2:
