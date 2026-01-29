@@ -363,12 +363,92 @@ data.tar.gz
 
 ---
 
+## Decision 011: Dynamic Question Suggestions with LLM Caching
+
+**Date:** 2026-01-28
+**Status:** Approved
+**Context:** Homepage had 3 hardcoded question suggestions. Wanted to make them dynamic and interesting, but calling an LLM on every page load would be expensive and slow.
+
+### Decision
+
+Use **Claude Haiku 4.5** to generate suggestions with **1-hour server-side TTL cache**.
+
+### Implementation
+
+```python
+# Module-level cache
+_suggestions_cache: dict = {"data": None, "expires": None}
+SUGGESTIONS_CACHE_TTL = timedelta(hours=1)
+
+@router.get("/suggestions", response_model=SuggestionsResponse)
+@limiter.limit("30/minute")
+async def get_suggestions(request: Request):
+    # Return cached if valid
+    if _suggestions_cache["data"] and now < _suggestions_cache["expires"]:
+        return {"suggestions": _suggestions_cache["data"]}
+
+    # Generate fresh suggestions
+    response = await client.messages.create(
+        model="claude-haiku-4-5-20251001",
+        max_tokens=150,
+        system="Generate 3 short PM questions. Return ONLY JSON array.",
+        messages=[{"role": "user", "content": "Generate 3 diverse PM questions"}]
+    )
+    suggestions = json.loads(response.content[0].text)
+
+    # Cache for 1 hour
+    _suggestions_cache["data"] = suggestions
+    _suggestions_cache["expires"] = now + SUGGESTIONS_CACHE_TTL
+    return {"suggestions": suggestions}
+```
+
+### Architecture
+
+| Layer | File | Pattern |
+|-------|------|---------|
+| Backend | `api/routers/chat.py` | GET endpoint with TTL cache |
+| Proxy | `web/app/api/suggestions/route.ts` | Next.js proxy (same as other routes) |
+| Client | `web/lib/api.ts` | `getSuggestions()` function |
+| UI | `web/app/page.tsx` | Skeleton while loading, fallback on error |
+
+### Rationale
+
+1. **Haiku over Sonnet**: Suggestions don't need deep reasoning; Haiku is 10x cheaper and faster
+2. **1-hour TTL**: Suggestions don't need per-request freshness; hourly rotation provides variety
+3. **Module-level cache**: Simple in-memory dict; no Redis needed for single-instance Railway deployment
+4. **Pydantic model**: `SuggestionsResponse` ensures API documentation and type safety
+5. **Generic error messages**: `"AI service temporarily unavailable"` instead of leaking internal errors
+
+### Code Review Findings (Fixed)
+
+| Issue | Severity | Fix |
+|-------|----------|-----|
+| No caching = LLM call per page load | P1 | Added 1-hour TTL cache |
+| Error message leaked API details | P2 | Generic error message |
+| Missing response model | P2 | Added `SuggestionsResponse` |
+
+### Performance Impact
+
+| Metric | Before | After |
+|--------|--------|-------|
+| LLM calls/day | 1000+ (per visitor) | ~24 (hourly) |
+| Response time (cached) | N/A | <5ms |
+| Response time (miss) | 500-2000ms | 500-2000ms |
+| Monthly cost at 1K visitors | ~$5 | ~$0.10 |
+
+### Frontend UX
+
+- **Loading**: Skeleton placeholders (3 pulsing buttons)
+- **Loaded**: Dynamic suggestion buttons
+- **Error**: Falls back to `DEFAULT_SUGGESTIONS` array
+
+---
+
 ## Future Decisions (Not Yet Made)
 
 - [ ] Reranking: Add Cohere or cross-encoder reranker?
 - [ ] Agentic search: Implement multi-step retrieval for complex queries?
-- [ ] Frontend: Next.js + Vercel AI SDK vs simpler CLI?
-- [ ] Caching: Cache frequent queries?
+- [x] ~~Caching: Cache frequent queries?~~ → Implemented for suggestions (Decision 011)
 
 ---
 
@@ -383,3 +463,4 @@ Tasks to complete during the next corpus re-indexing:
 ---
 
 *Last updated: 2026-01-28*
+*Added: Decision 011 (Dynamic Question Suggestions)*
