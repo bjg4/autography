@@ -5,6 +5,7 @@ import { usePostHog } from 'posthog-js/react'
 import CitationCard from '@/components/CitationCard'
 import AnswerDisplay from '@/components/AnswerDisplay'
 import { streamChat, getSources, getSuggestions, ChatResponse, Citation, SourcesResponse, ConversationTurn } from '@/lib/api'
+import { UserAvatar } from '@/components/BrandIcon'
 
 interface ThreadItem {
   question: string
@@ -520,7 +521,7 @@ export default function Home() {
           <div className="max-w-3xl mx-auto">
             {/* Header */}
             <header className="mb-8 text-center">
-              <h1 className="text-3xl font-semibold text-[#2D2A26] tracking-tight">
+              <h1 className="text-3xl font-serif italic text-[#2D2A26] tracking-tight">
                 Autography
               </h1>
               <p className="text-[#7D756A] mt-2">
@@ -611,7 +612,7 @@ export default function Home() {
           <div className="max-w-[920px] mx-auto">
             {/* Header (compact) */}
             <header className="mb-6">
-              <h1 className="text-2xl font-semibold text-[#2D2A26] tracking-tight">
+              <h1 className="text-2xl font-serif italic text-[#2D2A26] tracking-tight">
                 Autography
               </h1>
               <p className="text-sm text-[#7D756A] mt-1">
@@ -660,9 +661,7 @@ export default function Home() {
                   {/* Question + Sources row - aligned with response */}
                   <div className="flex gap-6 items-start">
                     <div className="flex items-start gap-3 flex-1 min-w-0">
-                      <div className="w-8 h-8 rounded-full bg-[#C45A3B]/10 flex items-center justify-center flex-shrink-0">
-                        <span className="text-sm">👤</span>
-                      </div>
+                      <UserAvatar />
                       <p className="text-[#2D2A26] font-medium pt-1">{item.question}</p>
                     </div>
                     {/* Spacer for sources column alignment */}
@@ -740,9 +739,7 @@ export default function Home() {
                   {/* Question + Sources row - aligned with response */}
                   <div className="flex gap-6 items-start">
                     <div className="flex items-start gap-3 flex-1 min-w-0">
-                      <div className="w-8 h-8 rounded-full bg-[#C45A3B]/10 flex items-center justify-center flex-shrink-0">
-                        <span className="text-sm">👤</span>
-                      </div>
+                      <UserAvatar />
                       <p className="text-[#2D2A26] font-medium pt-1">{currentQuestion}</p>
                     </div>
                     {/* Spacer for sources column alignment */}
