@@ -6,6 +6,7 @@ This is the core Autography experience - synthesized answers with evidence.
 
 import json
 import os
+import re
 from datetime import datetime, timedelta
 from typing import Optional
 
@@ -285,14 +286,30 @@ async def get_suggestions(request: Request):
             system="Generate 3 short, interesting questions about product management that someone might ask. Make them specific and varied - cover different PM topics like discovery, teams, prioritization, stakeholders, metrics, or strategy. Return ONLY a JSON array of 3 strings, nothing else. Example: [\"How do I...\", \"What makes...\", \"When should...\"]",
             messages=[{"role": "user", "content": "Generate 3 diverse PM questions"}]
         )
-        suggestions = json.loads(response.content[0].text)
+        raw_text = response.content[0].text.strip()
+
+        # Strip markdown code fences if present (```json ... ``` or ``` ... ```)
+        if raw_text.startswith("```"):
+            # Remove opening fence (with optional language identifier)
+            raw_text = re.sub(r"^```(?:json)?\s*\n?", "", raw_text)
+            # Remove closing fence
+            raw_text = re.sub(r"\n?```\s*$", "", raw_text)
+            raw_text = raw_text.strip()
+
+        suggestions = json.loads(raw_text)
+
+        # Validate it's a list of strings
+        if not isinstance(suggestions, list) or not all(isinstance(s, str) for s in suggestions):
+            raise ValueError("Invalid suggestions format")
 
         # Cache the suggestions
         _suggestions_cache["data"] = suggestions
         _suggestions_cache["expires"] = now + SUGGESTIONS_CACHE_TTL
 
         return {"suggestions": suggestions}
-    except json.JSONDecodeError:
+    except (json.JSONDecodeError, ValueError) as e:
+        # Log the error for debugging
+        print(f"[Suggestions] Parse error: {e}")
         # Fallback if response isn't valid JSON
         return {"suggestions": [
             "What makes a great product team?",
@@ -304,7 +321,8 @@ async def get_suggestions(request: Request):
             status_code=429,
             detail="Rate limit exceeded. Please wait and try again."
         )
-    except anthropic.APIError:
+    except anthropic.APIError as e:
+        print(f"[Suggestions] API error: {type(e).__name__}: {e}")
         raise HTTPException(
             status_code=502,
             detail="AI service temporarily unavailable"
