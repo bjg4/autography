@@ -171,6 +171,8 @@ export default function Home() {
   const [justClipped, setJustClipped] = useState<string | null>(null)
   const [drawerExpanded, setDrawerExpanded] = useState(false)
   const [copiedToast, setCopiedToast] = useState(false)
+  const [feedbackGiven, setFeedbackGiven] = useState<Record<number, 'up' | 'down'>>({})
+  const [retryingIndex, setRetryingIndex] = useState<number | null>(null)
 
   // Load clips from localStorage
   useEffect(() => {
@@ -316,17 +318,23 @@ export default function Home() {
   }
 
   const copyToClipboard = async (text: string) => {
-    await navigator.clipboard.writeText(text)
-    setCopiedToast(true)
-    setTimeout(() => setCopiedToast(false), 2000)
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopiedToast(true)
+      setTimeout(() => setCopiedToast(false), 2000)
+    } catch {
+      // Clipboard access denied - fail silently
+    }
   }
 
-  const trackFeedback = (feedback: 'up' | 'down', question: string, threadDepth: number) => {
+  const trackFeedback = (feedback: 'up' | 'down', questionLength: number, threadIndex: number) => {
+    // Don't send the actual question to analytics (privacy)
     posthog?.capture?.('response_feedback', {
       feedback,
-      question,
-      thread_depth: threadDepth
+      question_length: questionLength,
+      thread_depth: threadIndex
     })
+    setFeedbackGiven(prev => ({ ...prev, [threadIndex]: feedback }))
   }
 
   const exportClips = () => {
@@ -454,12 +462,19 @@ export default function Home() {
     handleSubmit(question)
   }
 
+  const handleRetry = async (q: string, idx: number) => {
+    setRetryingIndex(idx)
+    await handleSubmit(q)
+    setRetryingIndex(null)
+  }
+
   const startNewThread = () => {
     setThread([])
     setStreamingCitations([])
     setQuestion('')
     setError(null)
     setVisibleResponseIndex(-1)
+    setFeedbackGiven({})
   }
 
   const hasContent = thread.length > 0 || isLoading
@@ -715,29 +730,40 @@ export default function Home() {
                             </svg>
                           </button>
                           <button
-                            onClick={() => trackFeedback('up', item.question, idx)}
-                            className="w-7 h-7 rounded-lg flex items-center justify-center text-[#9A8C7B] hover:text-[#C45A3B] hover:bg-[#C45A3B]/5 transition-colors"
+                            onClick={() => trackFeedback('up', item.question.length, idx)}
+                            className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${
+                              feedbackGiven[idx] === 'up'
+                                ? 'text-[#C45A3B] bg-[#C45A3B]/10'
+                                : 'text-[#9A8C7B] hover:text-[#C45A3B] hover:bg-[#C45A3B]/5'
+                            }`}
                             aria-label="Helpful"
+                            aria-pressed={feedbackGiven[idx] === 'up'}
                           >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                            <svg className="w-4 h-4" fill={feedbackGiven[idx] === 'up' ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905a3.61 3.61 0 01-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
                             </svg>
                           </button>
                           <button
-                            onClick={() => trackFeedback('down', item.question, idx)}
-                            className="w-7 h-7 rounded-lg flex items-center justify-center text-[#9A8C7B] hover:text-[#C45A3B] hover:bg-[#C45A3B]/5 transition-colors"
+                            onClick={() => trackFeedback('down', item.question.length, idx)}
+                            className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors ${
+                              feedbackGiven[idx] === 'down'
+                                ? 'text-[#C45A3B] bg-[#C45A3B]/10'
+                                : 'text-[#9A8C7B] hover:text-[#C45A3B] hover:bg-[#C45A3B]/5'
+                            }`}
                             aria-label="Not helpful"
+                            aria-pressed={feedbackGiven[idx] === 'down'}
                           >
-                            <svg className="w-4 h-4 rotate-180" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                            <svg className="w-4 h-4 rotate-180" fill={feedbackGiven[idx] === 'down' ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905a3.61 3.61 0 01-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
                             </svg>
                           </button>
                           <button
-                            onClick={() => handleSubmit(item.question)}
-                            className="w-7 h-7 rounded-lg flex items-center justify-center text-[#9A8C7B] hover:text-[#C45A3B] hover:bg-[#C45A3B]/5 transition-colors"
+                            onClick={() => handleRetry(item.question, idx)}
+                            disabled={isLoading}
+                            className="w-7 h-7 rounded-lg flex items-center justify-center text-[#9A8C7B] hover:text-[#C45A3B] hover:bg-[#C45A3B]/5 transition-colors disabled:opacity-50"
                             aria-label="Try again"
                           >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                            <svg className={`w-4 h-4 ${retryingIndex === idx ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                             </svg>
                           </button>
