@@ -64,7 +64,13 @@ class SourcesResponse(BaseModel):
 
 
 class HybridSearch:
-    """Hybrid semantic + BM25 search over the PM knowledge base."""
+    """
+    Hybrid semantic + BM25 search over the PM knowledge base.
+
+    Uses two-level retrieval:
+    - Retrieval chunks: ~200 tokens (what we search)
+    - Parent spans: ~1000 tokens (what we return to LLM)
+    """
 
     def __init__(
         self,
@@ -88,6 +94,9 @@ class HybridSearch:
 
         # Load BM25 index
         self._load_bm25(bm25_path)
+
+        # Build parent span index for fast expansion
+        self._build_parent_span_index()
 
     def _load_bm25(self, bm25_path: str):
         """Load BM25 index from pickle file with validation."""
@@ -122,6 +131,40 @@ class HybridSearch:
             self._sources_cache = self._compute_sources()
 
         print(f"Loaded BM25 index ({len(self.doc_ids)} docs)")
+
+    def _build_parent_span_index(self):
+        """Build index mapping parent_span_id to list of chunk indices."""
+        self.parent_span_to_chunks = {}
+
+        for idx, meta in enumerate(self.doc_metadatas):
+            span_id = meta.get('parent_span_id')
+            if span_id:
+                if span_id not in self.parent_span_to_chunks:
+                    self.parent_span_to_chunks[span_id] = []
+                self.parent_span_to_chunks[span_id].append(idx)
+
+        # Sort chunks within each span by chunk_in_span
+        for span_id in self.parent_span_to_chunks:
+            self.parent_span_to_chunks[span_id].sort(
+                key=lambda idx: self.doc_metadatas[idx].get('chunk_in_span', 0)
+            )
+
+        print(f"Built parent span index ({len(self.parent_span_to_chunks)} spans)")
+
+    def _expand_to_parent_span(self, chunk_idx: int) -> str:
+        """Expand a chunk to its full parent span by stitching siblings."""
+        meta = self.doc_metadatas[chunk_idx]
+        span_id = meta.get('parent_span_id')
+
+        if not span_id or span_id not in self.parent_span_to_chunks:
+            # Fallback: return just this chunk
+            return self.doc_texts[chunk_idx]
+
+        # Get all chunks in this span and stitch them
+        chunk_indices = self.parent_span_to_chunks[span_id]
+        texts = [self.doc_texts[idx] for idx in chunk_indices]
+
+        return '\n\n'.join(texts)
 
     def _semantic_search(self, query: str, n: int) -> list[tuple[str, float]]:
         """Perform semantic search via Chroma."""
@@ -242,21 +285,35 @@ class HybridSearch:
         source_types: Optional[list[str]],
         author: Optional[str],
         authors: Optional[list[str]],
-        diversify: bool
+        diversify: bool,
+        expand_spans: bool = True
     ) -> list[dict]:
-        """Apply filtering and diversity constraints to ranked results."""
+        """
+        Apply filtering, diversity constraints, and parent span expansion.
+
+        With expand_spans=True (default), deduplicates by parent_span_id and
+        returns expanded parent span content (~1000 tokens) instead of
+        individual retrieval chunks (~200 tokens).
+        """
         results = []
         seen_authors = {}
         seen_sources = {}
+        seen_spans = set()  # De-dupe by parent span
 
         for doc_id, score in ranked:
-            idx = self.doc_id_to_idx[doc_id]
+            idx = self.doc_id_to_idx.get(doc_id)
+            if idx is None:
+                continue
+
             metadata = self.doc_metadatas[idx]
 
+            # Filter by source type
             if source_type and metadata.get('source_type') != source_type:
                 continue
             if source_types and metadata.get('source_type') not in source_types:
                 continue
+
+            # Filter by author
             if author and author.lower() not in metadata.get('author', '').lower():
                 continue
             if authors:
@@ -264,6 +321,14 @@ class HybridSearch:
                 if not any(a.lower() in doc_author for a in authors):
                     continue
 
+            # De-duplicate by parent span (most important for two-level retrieval)
+            span_id = metadata.get('parent_span_id')
+            if expand_spans and span_id:
+                if span_id in seen_spans:
+                    continue
+                seen_spans.add(span_id)
+
+            # Diversity constraints (author and source limits)
             if diversify:
                 doc_author = metadata.get('author', 'Unknown')
                 doc_source = metadata.get('title', '') or metadata.get('book_title', '')
@@ -279,11 +344,18 @@ class HybridSearch:
                 seen_authors[doc_author] = author_count + 1
                 seen_sources[doc_source] = source_count + 1
 
+            # Get content - expand to parent span if enabled
+            if expand_spans:
+                content = self._expand_to_parent_span(idx)
+            else:
+                content = self.doc_texts[idx]
+
             results.append({
                 'id': doc_id,
-                'content': self.doc_texts[idx],
+                'content': content,
                 'metadata': metadata,
-                'score': score
+                'score': score,
+                'parent_span_id': span_id
             })
 
             if len(results) >= n_results:
