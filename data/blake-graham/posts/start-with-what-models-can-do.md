@@ -1,6 +1,6 @@
 ---
 title: "Start With What Models Can Do"
-author: Blake Green
+author: Blake Graham
 source_url: https://blake.ist/posts/start-with-what-models-can-do
 publish_date: '2025-10-31'
 scraped_date: '2026-01-19'

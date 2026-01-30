@@ -1,6 +1,6 @@
 ---
 title: "The Hidden Physics of Work"
-author: Blake Green
+author: Blake Graham
 source_url: https://blake.ist/posts/the-hidden-physics-of-work
 publish_date: '2025-11-28'
 scraped_date: '2026-01-19'

@@ -1,6 +1,6 @@
 ---
 title: "The Fridge Is a Trap"
-author: Blake Green
+author: Blake Graham
 source_url: https://blake.ist/posts/the-fridge-is-a-trap
 publish_date: '2025-11-09'
 scraped_date: '2026-01-19'

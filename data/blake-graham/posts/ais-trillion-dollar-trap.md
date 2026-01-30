@@ -1,6 +1,6 @@
 ---
 title: "AI's Trillion-Dollar Trap"
-author: Blake Green
+author: Blake Graham
 source_url: https://blake.ist/posts/ais-trillion-dollar-trap
 publish_date: '2025-10-18'
 scraped_date: '2026-01-19'

@@ -1,6 +1,6 @@
 ---
 title: "Compound Calibration Part II: The Harness Layer"
-author: Blake Green
+author: Blake Graham
 source_url: https://blake.ist/posts/compound-calibration-part-ii-the-harness-layer
 publish_date: '2025-12-09'
 scraped_date: '2026-01-19'

@@ -1,6 +1,6 @@
 ---
 title: "2026: When the System Becomes the Bottleneck"
-author: Blake Green
+author: Blake Graham
 source_url: https://blake.ist/posts/2026-when-the-system-becomes-the-bottleneck
 publish_date: '2025-12-26'
 scraped_date: '2026-01-19'

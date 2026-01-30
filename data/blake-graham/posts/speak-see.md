@@ -1,6 +1,6 @@
 ---
 title: "Speak / See"
-author: Blake Green
+author: Blake Graham
 source_url: https://blake.ist/posts/speak-see
 publish_date: '2025-12-17'
 scraped_date: '2026-01-19'

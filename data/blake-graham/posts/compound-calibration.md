@@ -1,6 +1,6 @@
 ---
 title: "Compound Calibration"
-author: Blake Green
+author: Blake Graham
 source_url: https://blake.ist/posts/compound-calibration
 publish_date: '2025-09-30'
 scraped_date: '2026-01-19'

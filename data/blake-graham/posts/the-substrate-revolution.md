@@ -1,6 +1,6 @@
 ---
 title: "The Substrate Revolution: When We Mistook the Shadow for the Fire"
-author: Blake Green
+author: Blake Graham
 source_url: https://blake.ist/posts/the-substrate-revolution-when-we-mistook-the-shadow-for-the-fire
 publish_date: '2025-12-27'
 scraped_date: '2026-01-19'

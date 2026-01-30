@@ -1,6 +1,6 @@
 ---
 title: "We're Eighty Years Early"
-author: Blake Green
+author: Blake Graham
 source_url: https://blake.ist/posts/were-eighty-years-early
 publish_date: '2025-11-25'
 scraped_date: '2026-01-19'

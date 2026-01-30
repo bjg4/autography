@@ -1,6 +1,6 @@
 ---
 title: "The AI Reflex"
-author: Blake Green
+author: Blake Graham
 source_url: https://blake.ist/posts/the-ai-reflex
 publish_date: '2025-12-12'
 scraped_date: '2026-01-19'

@@ -1,6 +1,6 @@
 ---
 title: "If You Give an AI a Computer"
-author: Blake Green
+author: Blake Graham
 source_url: https://blake.ist/posts/if-you-give-an-ai-a-computer
 publish_date: '2026-01-01'
 scraped_date: '2026-01-19'

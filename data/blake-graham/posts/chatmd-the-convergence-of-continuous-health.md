@@ -1,6 +1,6 @@
 ---
 title: "ChatMD: The Convergence of Continuous Health"
-author: Blake Green
+author: Blake Graham
 source_url: https://blake.ist/posts/chatmd-the-convergence-of-continuous-health
 publish_date: '2026-01-07'
 scraped_date: '2026-01-19'
