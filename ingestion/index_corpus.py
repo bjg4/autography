@@ -233,6 +233,14 @@ def collect_documents(data_dir: Path, tokenizer) -> list[dict]:
         if len(body.strip()) < 100:
             continue
 
+        # Skip non-content book sections (index, ToC, copyright, etc.)
+        title = metadata.get('title', md_file.stem).lower()
+        skip_titles = {'index', 'contents', 'table of contents', 'acknowledgments',
+                       'acknowledgements', 'notes', 'untitled', 'copyright',
+                       'about the author', 'dedication', 'epigraph'}
+        if metadata.get('source_type') == 'book_chapter' and title in skip_titles:
+            continue
+
         # Base metadata for all chunks from this file
         base_meta = {
             'file_path': str(md_file),
