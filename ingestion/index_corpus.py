@@ -72,7 +72,7 @@ def get_author_from_path(filepath: Path) -> str:
     """Extract author from directory structure."""
     path_str = str(filepath)
 
-    if '/blake-green/' in path_str:
+    if '/blake-graham/' in path_str:
         return 'Blake Graham'
     elif '/john-cutler/' in path_str:
         return 'John Cutler'
