@@ -696,7 +696,7 @@ export default function Home() {
                   <div className="flex gap-6 items-stretch mt-4">
                     {/* Answer */}
                     <div className="flex-1 min-w-0">
-                      <div className="group p-5 bg-white rounded-xl border border-[#E5E0D8]">
+                      <div className="p-5 bg-white rounded-xl border border-[#E5E0D8]">
                         <AnswerDisplay
                           answer={item.response.answer}
                           citations={item.response.citations}
@@ -704,7 +704,7 @@ export default function Home() {
                         />
 
                         {/* Quick Actions */}
-                        <div className="flex items-center gap-1 mt-4 pt-3 border-t border-[#E5E0D8]/50 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                        <div className="flex items-center gap-1 mt-4 pt-3 border-t border-[#E5E0D8]/50">
                           <button
                             onClick={() => copyToClipboard(item.response.answer)}
                             className="w-7 h-7 rounded-lg flex items-center justify-center text-[#9A8C7B] hover:text-[#C45A3B] hover:bg-[#C45A3B]/5 transition-colors"
