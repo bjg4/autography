@@ -69,20 +69,20 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Load search engine and observability on startup."""
+    """Initialize observability on startup. Search engine loads lazily."""
     # Initialize LLM observability first (before any Anthropic client is used)
     init_phoenix_tracing()
 
-    # Get paths from environment or use defaults
+    # Configure paths for lazy loading (search engine loads on first request)
     chroma_path = os.environ.get('CHROMA_PATH', str(Path(__file__).parent.parent / 'chroma_db'))
     bm25_path = os.environ.get('BM25_PATH', str(Path(__file__).parent.parent / 'bm25_index.pkl'))
 
-    print(f"Loading search engine...")
+    print(f"Server starting (search engine will load on first request)...")
     print(f"  Chroma path: {chroma_path}")
     print(f"  BM25 path: {bm25_path}")
 
-    search.init_search_engine(chroma_path, bm25_path)
-    print(f"Search engine loaded with {search.get_document_count()} documents")
+    # Initialize paths but don't load yet (lazy=True)
+    search.init_search_engine(chroma_path, bm25_path, lazy=True)
 
     yield
 
@@ -133,7 +133,9 @@ async def root():
 @limiter.limit("60/minute")
 async def health(request: Request):
     """Health check endpoint."""
+    doc_count = search.get_document_count()
     return {
         "status": "ok",
-        "documents": search.get_document_count()
+        "search_ready": doc_count > 0,
+        "documents": doc_count
     }

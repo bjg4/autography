@@ -25,8 +25,10 @@ router = APIRouter(prefix="/api", tags=["search"])
 # Rate limiter
 limiter = Limiter(key_func=get_remote_address)
 
-# Global search engine instance
+# Global search engine instance (lazy loaded)
 _search_engine: Optional["HybridSearch"] = None
+_chroma_path: Optional[str] = None
+_bm25_path: Optional[str] = None
 
 
 class SearchRequest(BaseModel):
@@ -387,10 +389,20 @@ class HybridSearch:
         return self._sources_cache
 
 
-def init_search_engine(chroma_path: str, bm25_path: str):
-    """Initialize the global search engine."""
-    global _search_engine
-    _search_engine = HybridSearch(chroma_path, bm25_path)
+def init_search_engine(chroma_path: str, bm25_path: str, lazy: bool = False):
+    """Initialize the global search engine.
+
+    Args:
+        chroma_path: Path to ChromaDB directory
+        bm25_path: Path to BM25 pickle file
+        lazy: If True, store paths for lazy loading instead of loading now
+    """
+    global _search_engine, _chroma_path, _bm25_path
+    _chroma_path = chroma_path
+    _bm25_path = bm25_path
+
+    if not lazy:
+        _search_engine = HybridSearch(chroma_path, bm25_path)
 
 
 def get_document_count() -> int:
@@ -401,9 +413,14 @@ def get_document_count() -> int:
 
 
 def get_search_engine() -> HybridSearch:
-    """Get the search engine instance."""
+    """Get the search engine instance, initializing lazily if needed."""
+    global _search_engine
     if _search_engine is None:
-        raise HTTPException(status_code=503, detail="Search engine not initialized")
+        if _chroma_path is None or _bm25_path is None:
+            raise HTTPException(status_code=503, detail="Search engine paths not configured")
+        print(f"Lazy loading search engine...")
+        _search_engine = HybridSearch(_chroma_path, _bm25_path)
+        print(f"Search engine loaded with {len(_search_engine.doc_ids)} documents")
     return _search_engine
 
 
