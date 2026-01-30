@@ -64,8 +64,10 @@ class HybridSearch:
                 cache = pickle.load(f)
                 self.bm25 = cache['bm25']
                 self.doc_ids = cache['doc_ids']
-                self.doc_texts = cache['doc_texts']
                 self.doc_metadatas = cache['doc_metadatas']
+                # Load doc_texts from Chroma (not in pickle to save memory)
+                all_docs = self.collection.get(ids=self.doc_ids, include=['documents'])
+                self.doc_texts = all_docs['documents']
                 print(f"Loaded BM25 index from cache ({len(self.doc_ids)} docs)")
                 return
 
@@ -81,15 +83,14 @@ class HybridSearch:
         tokenized_corpus = [doc.lower().split() for doc in self.doc_texts]
         self.bm25 = BM25Okapi(tokenized_corpus)
 
-        # Cache index
+        # Cache index (doc_texts NOT saved - fetched from Chroma on demand to save memory)
         with open(bm25_cache, 'wb') as f:
             pickle.dump({
                 'bm25': self.bm25,
                 'doc_ids': self.doc_ids,
-                'doc_texts': self.doc_texts,
                 'doc_metadatas': self.doc_metadatas
             }, f)
-        print(f"Built and cached BM25 index ({len(self.doc_ids)} docs)")
+        print(f"Built and cached BM25 index ({len(self.doc_ids)} docs, texts omitted)")
 
     def _semantic_search(self, query: str, n: int) -> list[tuple[str, float]]:
         """Perform semantic search via Chroma.

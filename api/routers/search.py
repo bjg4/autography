@@ -118,21 +118,21 @@ class HybridSearch:
         with open(bm25_path, 'rb') as f:
             cache = pickle.load(f)
 
-            # Validate expected structure
-            required_keys = {'bm25', 'doc_ids', 'doc_texts', 'doc_metadatas'}
+            # Validate expected structure (doc_texts now optional - loaded from Chroma)
+            required_keys = {'bm25', 'doc_ids', 'doc_metadatas'}
             if not required_keys.issubset(cache.keys()):
                 raise ValueError(f"Invalid BM25 index structure - missing keys: {required_keys - set(cache.keys())}")
 
             self.bm25 = cache['bm25']
             self.doc_ids = cache['doc_ids']
-            self.doc_texts = cache['doc_texts']
             self.doc_metadatas = cache['doc_metadatas']
             # Build O(1) lookup dict for document retrieval
             self.doc_id_to_idx = {doc_id: idx for idx, doc_id in enumerate(self.doc_ids)}
             # Cache sources (computed once, not on every request)
             self._sources_cache = self._compute_sources()
 
-        print(f"Loaded BM25 index ({len(self.doc_ids)} docs)")
+        # doc_texts NOT loaded into memory - fetched from Chroma on demand
+        print(f"Loaded BM25 index ({len(self.doc_ids)} docs, texts fetched on demand)")
 
     def _build_parent_span_index(self):
         """Build index mapping parent_span_id to list of chunk indices."""
@@ -153,19 +153,34 @@ class HybridSearch:
 
         print(f"Built parent span index ({len(self.parent_span_to_chunks)} spans)")
 
-    def _expand_to_parent_span(self, chunk_idx: int) -> str:
+    def _get_texts_by_ids(self, doc_ids: list[str]) -> dict[str, str]:
+        """Fetch document texts from Chroma by IDs."""
+        if not doc_ids:
+            return {}
+        result = self.collection.get(ids=doc_ids, include=['documents'])
+        return dict(zip(result['ids'], result['documents']))
+
+    def _expand_to_parent_span(self, doc_id: str) -> str:
         """Expand a chunk to its full parent span by stitching siblings."""
-        meta = self.doc_metadatas[chunk_idx]
+        idx = self.doc_id_to_idx.get(doc_id)
+        if idx is None:
+            return ""
+
+        meta = self.doc_metadatas[idx]
         span_id = meta.get('parent_span_id')
 
         if not span_id or span_id not in self.parent_span_to_chunks:
             # Fallback: return just this chunk
-            return self.doc_texts[chunk_idx]
+            texts = self._get_texts_by_ids([doc_id])
+            return texts.get(doc_id, "")
 
-        # Get all chunks in this span and stitch them
+        # Get all chunks in this span and fetch their texts
         chunk_indices = self.parent_span_to_chunks[span_id]
-        texts = [self.doc_texts[idx] for idx in chunk_indices]
+        chunk_ids = [self.doc_ids[i] for i in chunk_indices]
+        texts_map = self._get_texts_by_ids(chunk_ids)
 
+        # Stitch in order
+        texts = [texts_map.get(cid, "") for cid in chunk_ids]
         return '\n\n'.join(texts)
 
     def _semantic_search(self, query: str, n: int) -> list[tuple[str, float]]:
@@ -348,9 +363,10 @@ class HybridSearch:
 
             # Get content - expand to parent span if enabled
             if expand_spans:
-                content = self._expand_to_parent_span(idx)
+                content = self._expand_to_parent_span(doc_id)
             else:
-                content = self.doc_texts[idx]
+                texts = self._get_texts_by_ids([doc_id])
+                content = texts.get(doc_id, "")
 
             results.append({
                 'id': doc_id,

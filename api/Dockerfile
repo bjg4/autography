@@ -19,7 +19,7 @@ RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTr
 COPY api/ ./
 
 # Download and extract data from GitHub release
-RUN curl -L https://github.com/bjg4/autography/releases/download/v1.1.0/data.tar.gz -o data.tar.gz \
+RUN curl -L https://github.com/bjg4/autography/releases/download/v1.1.1/data.tar.gz -o data.tar.gz \
     && tar -xzf data.tar.gz \
     && rm data.tar.gz
 
