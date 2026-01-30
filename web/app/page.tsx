@@ -170,6 +170,7 @@ export default function Home() {
   const [selectedText, setSelectedText] = useState('')
   const [justClipped, setJustClipped] = useState<string | null>(null)
   const [drawerExpanded, setDrawerExpanded] = useState(false)
+  const [copiedToast, setCopiedToast] = useState(false)
 
   // Load clips from localStorage
   useEffect(() => {
@@ -312,6 +313,20 @@ export default function Home() {
 
   const copyClip = async (clip: Clip) => {
     await navigator.clipboard.writeText(clip.text)
+  }
+
+  const copyToClipboard = async (text: string) => {
+    await navigator.clipboard.writeText(text)
+    setCopiedToast(true)
+    setTimeout(() => setCopiedToast(false), 2000)
+  }
+
+  const trackFeedback = (feedback: 'up' | 'down', question: string, threadDepth: number) => {
+    posthog?.capture?.('response_feedback', {
+      feedback,
+      question,
+      thread_depth: threadDepth
+    })
   }
 
   const exportClips = () => {
@@ -515,6 +530,16 @@ export default function Home() {
         </div>
       )}
 
+      {/* Copied toast */}
+      {copiedToast && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-4 py-2 bg-[#2D2A26] text-white rounded-lg shadow-lg flex items-center gap-2 text-sm">
+          <svg className="w-4 h-4 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          </svg>
+          Copied!
+        </div>
+      )}
+
       <div className={`mx-auto px-4 py-8 ${clipMode ? 'pt-16' : ''}`}>
         {/* Initial state - centered, narrower */}
         {!hasContent && (
@@ -671,12 +696,52 @@ export default function Home() {
                   <div className="flex gap-6 items-stretch mt-4">
                     {/* Answer */}
                     <div className="flex-1 min-w-0">
-                      <div className="p-5 bg-white rounded-xl border border-[#E5E0D8]">
+                      <div className="group p-5 bg-white rounded-xl border border-[#E5E0D8]">
                         <AnswerDisplay
                           answer={item.response.answer}
                           citations={item.response.citations}
                           onCitationClick={() => {}}
                         />
+
+                        {/* Quick Actions */}
+                        <div className="flex items-center gap-1 mt-4 pt-3 border-t border-[#E5E0D8]/50 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                          <button
+                            onClick={() => copyToClipboard(item.response.answer)}
+                            className="w-7 h-7 rounded-lg flex items-center justify-center text-[#9A8C7B] hover:text-[#C45A3B] hover:bg-[#C45A3B]/5 transition-colors"
+                            aria-label="Copy response"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={() => trackFeedback('up', item.question, idx)}
+                            className="w-7 h-7 rounded-lg flex items-center justify-center text-[#9A8C7B] hover:text-[#C45A3B] hover:bg-[#C45A3B]/5 transition-colors"
+                            aria-label="Helpful"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905a3.61 3.61 0 01-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={() => trackFeedback('down', item.question, idx)}
+                            className="w-7 h-7 rounded-lg flex items-center justify-center text-[#9A8C7B] hover:text-[#C45A3B] hover:bg-[#C45A3B]/5 transition-colors"
+                            aria-label="Not helpful"
+                          >
+                            <svg className="w-4 h-4 rotate-180" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M14 10h4.764a2 2 0 011.789 2.894l-3.5 7A2 2 0 0115.263 21h-4.017c-.163 0-.326-.02-.485-.06L7 20m7-10V5a2 2 0 00-2-2h-.095c-.5 0-.905.405-.905.905a3.61 3.61 0 01-.608 2.006L7 11v9m7-10h-2M7 20H5a2 2 0 01-2-2v-6a2 2 0 012-2h2.5" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={() => handleSubmit(item.question)}
+                            className="w-7 h-7 rounded-lg flex items-center justify-center text-[#9A8C7B] hover:text-[#C45A3B] hover:bg-[#C45A3B]/5 transition-colors"
+                            aria-label="Try again"
+                          >
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="1.5" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                            </svg>
+                          </button>
+                        </div>
                       </div>
 
                       {/* Follow-up questions */}
