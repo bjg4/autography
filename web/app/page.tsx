@@ -23,9 +23,9 @@ interface Clip {
 }
 
 const sourceTypeConfig: Record<string, { label: string; color: string }> = {
-  essay: { label: 'Essay', color: 'bg-blue-50 text-blue-600' },
-  book_chapter: { label: 'Book', color: 'bg-amber-50 text-amber-600' },
-  podcast_transcript: { label: 'Podcast', color: 'bg-purple-50 text-purple-600' },
+  essay: { label: 'Essay', color: 'bg-[#E8E4DC] text-[#6B6358]' },
+  book_chapter: { label: 'Book', color: 'bg-[#E5DED4] text-[#7A6B5A]' },
+  podcast_transcript: { label: 'Podcast', color: 'bg-[#C45A3B]/10 text-[#C45A3B]' },
 }
 
 const DEFAULT_SUGGESTIONS = [
