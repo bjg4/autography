@@ -10,9 +10,10 @@ from pathlib import Path
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
-from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
+from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
+
+from limiter import limiter
 from starlette.middleware.base import BaseHTTPMiddleware
 
 # Load .env file if it exists
@@ -51,8 +52,7 @@ def init_phoenix_tracing():
         print(f"Phoenix initialization failed: {e}")
         return False
 
-# Rate limiter setup
-limiter = Limiter(key_func=get_remote_address)
+# Rate limiter imported from limiter.py (shared across all routers)
 
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):

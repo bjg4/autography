@@ -7,6 +7,7 @@ Uses Reciprocal Rank Fusion (RRF) to combine rankings:
     where k=60 (standard constant)
 """
 
+import hashlib
 import pickle
 from pathlib import Path
 from typing import Optional
@@ -90,7 +91,14 @@ class HybridSearch:
                 'doc_ids': self.doc_ids,
                 'doc_metadatas': self.doc_metadatas
             }, f)
+
+        # Generate checksum for security validation (pickle can execute arbitrary code)
+        with open(bm25_cache, 'rb') as f:
+            checksum = hashlib.sha256(f.read()).hexdigest()
+        checksum_path = bm25_cache.with_suffix('.sha256')
+        checksum_path.write_text(checksum)
         print(f"Built and cached BM25 index ({len(self.doc_ids)} docs, texts omitted)")
+        print(f"Generated checksum: {checksum_path}")
 
     def _semantic_search(self, query: str, n: int) -> list[tuple[str, float]]:
         """Perform semantic search via Chroma.

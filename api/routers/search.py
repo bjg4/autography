@@ -17,13 +17,9 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 from rank_bm25 import BM25Okapi
 from sentence_transformers import SentenceTransformer
-from slowapi import Limiter
-from slowapi.util import get_remote_address
+from limiter import limiter
 
 router = APIRouter(prefix="/api", tags=["search"])
-
-# Rate limiter
-limiter = Limiter(key_func=get_remote_address)
 
 # Global search engine instance (lazy loaded)
 _search_engine: Optional["HybridSearch"] = None
@@ -33,7 +29,7 @@ _bm25_path: Optional[str] = None
 
 class SearchRequest(BaseModel):
     """Search request body."""
-    query: str = Field(..., min_length=1, description="Search query")
+    query: str = Field(..., min_length=1, max_length=10000, description="Search query")
     n_results: int = Field(default=10, ge=1, le=50, description="Number of results")
     source_type: Optional[str] = Field(default=None, description="Filter by source type")
     author: Optional[str] = Field(default=None, description="Filter by author")
@@ -106,14 +102,18 @@ class HybridSearch:
         if not Path(bm25_path).exists():
             raise FileNotFoundError(f"BM25 index not found: {bm25_path}")
 
-        # Check for checksum file (for integrity validation)
+        # Validate checksum (mandatory for security - pickle can execute arbitrary code)
         checksum_path = Path(bm25_path).with_suffix('.sha256')
-        if checksum_path.exists():
-            expected_hash = checksum_path.read_text().strip()
-            with open(bm25_path, 'rb') as f:
-                actual_hash = hashlib.sha256(f.read()).hexdigest()
-            if actual_hash != expected_hash:
-                raise ValueError(f"BM25 index checksum mismatch - file may be corrupted or tampered")
+        if not checksum_path.exists():
+            raise FileNotFoundError(
+                f"BM25 checksum file required but not found: {checksum_path}. "
+                "Generate with: sha256sum bm25_index.pkl > bm25_index.sha256"
+            )
+        expected_hash = checksum_path.read_text().strip().split()[0]  # Handle "hash filename" format
+        with open(bm25_path, 'rb') as f:
+            actual_hash = hashlib.sha256(f.read()).hexdigest()
+        if actual_hash != expected_hash:
+            raise ValueError(f"BM25 index checksum mismatch - file may be corrupted or tampered")
 
         with open(bm25_path, 'rb') as f:
             cache = pickle.load(f)
@@ -311,11 +311,14 @@ class HybridSearch:
         With expand_spans=True (default), deduplicates by parent_span_id and
         returns expanded parent span content (~1000 tokens) instead of
         individual retrieval chunks (~200 tokens).
+
+        Uses batched Chroma fetches for efficiency (single DB call instead of N).
         """
-        results = []
+        # Phase 1: Filter and collect candidates (no DB calls yet)
+        candidates = []
         seen_authors = {}
         seen_sources = {}
-        seen_spans = set()  # De-dupe by parent span
+        seen_spans = set()
 
         for doc_id, score in ranked:
             idx = self.doc_id_to_idx.get(doc_id)
@@ -338,14 +341,14 @@ class HybridSearch:
                 if not any(a.lower() in doc_author for a in authors):
                     continue
 
-            # De-duplicate by parent span (most important for two-level retrieval)
+            # De-duplicate by parent span
             span_id = metadata.get('parent_span_id')
             if expand_spans and span_id:
                 if span_id in seen_spans:
                     continue
                 seen_spans.add(span_id)
 
-            # Diversity constraints (author and source limits)
+            # Diversity constraints
             if diversify:
                 doc_author = metadata.get('author', 'Unknown')
                 doc_source = metadata.get('title', '') or metadata.get('book_title', '')
@@ -361,12 +364,37 @@ class HybridSearch:
                 seen_authors[doc_author] = author_count + 1
                 seen_sources[doc_source] = source_count + 1
 
-            # Get content - expand to parent span if enabled
-            if expand_spans:
-                content = self._expand_to_parent_span(doc_id)
+            candidates.append((doc_id, score, metadata, span_id))
+
+            if len(candidates) >= n_results:
+                break
+
+        if not candidates:
+            return []
+
+        # Phase 2: Batch fetch all needed chunk texts (single DB call)
+        needed_chunk_ids = set()
+        for doc_id, _, metadata, span_id in candidates:
+            if expand_spans and span_id and span_id in self.parent_span_to_chunks:
+                chunk_indices = self.parent_span_to_chunks[span_id]
+                chunk_ids = [self.doc_ids[i] for i in chunk_indices]
+                needed_chunk_ids.update(chunk_ids)
             else:
-                texts = self._get_texts_by_ids([doc_id])
-                content = texts.get(doc_id, "")
+                needed_chunk_ids.add(doc_id)
+
+        all_texts = self._get_texts_by_ids(list(needed_chunk_ids))
+
+        # Phase 3: Build results using cached texts
+        results = []
+        for doc_id, score, metadata, span_id in candidates:
+            if expand_spans and span_id and span_id in self.parent_span_to_chunks:
+                # Stitch parent span from cached texts
+                chunk_indices = self.parent_span_to_chunks[span_id]
+                chunk_ids = [self.doc_ids[i] for i in chunk_indices]
+                texts = [all_texts.get(cid, "") for cid in chunk_ids]
+                content = '\n\n'.join(texts)
+            else:
+                content = all_texts.get(doc_id, "")
 
             results.append({
                 'id': doc_id,
@@ -375,9 +403,6 @@ class HybridSearch:
                 'score': score,
                 'parent_span_id': span_id
             })
-
-            if len(results) >= n_results:
-                break
 
         return results
 

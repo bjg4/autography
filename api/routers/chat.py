@@ -15,9 +15,7 @@ from anthropic import AsyncAnthropic
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-from slowapi import Limiter
-from slowapi.util import get_remote_address
-
+from limiter import limiter
 from routers.search import get_search_engine
 
 # Cache for suggestions (refreshed hourly)
@@ -25,9 +23,6 @@ _suggestions_cache: dict = {"data": None, "expires": None}
 SUGGESTIONS_CACHE_TTL = timedelta(hours=1)
 
 router = APIRouter(prefix="/api", tags=["chat"])
-
-# Rate limiter - 10 requests per minute for expensive chat endpoints
-limiter = Limiter(key_func=get_remote_address)
 
 # Initialize async Anthropic client (doesn't block FastAPI event loop)
 client = AsyncAnthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
@@ -238,9 +233,10 @@ Here's what I found in the knowledge base:
             detail="Rate limit exceeded. Please wait a minute and try again."
         )
     except anthropic.APIError as e:
+        print(f"[Chat] Anthropic API error: {type(e).__name__}: {e}")
         raise HTTPException(
             status_code=502,
-            detail=f"AI service error: {str(e)}"
+            detail="AI service temporarily unavailable"
         )
 
     # 4. Extract follow-ups and clean answer
@@ -382,14 +378,19 @@ Here's what I found in the knowledge base:
         full_messages = messages + [{"role": "user", "content": user_message}]
 
         # Stream the answer
-        async with client.messages.stream(
-            model="claude-sonnet-4-5-20250929",
-            max_tokens=1500,
-            system=SYSTEM_PROMPT,
-            messages=full_messages
-        ) as stream:
-            async for text in stream.text_stream:
-                yield f"data: {json.dumps({'type': 'token', 'data': text})}\n\n"
+        try:
+            async with client.messages.stream(
+                model="claude-sonnet-4-5-20250929",
+                max_tokens=1500,
+                system=SYSTEM_PROMPT,
+                messages=full_messages
+            ) as stream:
+                async for text in stream.text_stream:
+                    yield f"data: {json.dumps({'type': 'token', 'data': text})}\n\n"
+        except anthropic.APIError as e:
+            print(f"[Chat Stream] Stream interrupted: {type(e).__name__}: {e}")
+            yield f"data: {json.dumps({'type': 'error', 'message': 'Response interrupted. Please try again.'})}\n\n"
+            return
 
         yield f"data: {json.dumps({'type': 'done'})}\n\n"
 
